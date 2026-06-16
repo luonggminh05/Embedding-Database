@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: file-watcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: file-watcher
+  template:
+    metadata:
+      labels:
+        app: file-watcher
+    spec:
+      containers:
+        - name: file-watcher
+          image: file_watcher:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "ingest_watcher.py"]
+          env:
+            - name: API_URL
+              value: "http://api-server:8001/db/add"
+          volumeMounts:
+            - name: papers-volume
+              mountPath: /app/papers
+      volumes:
+        - name: papers-volume
+          hostPath:
+            # Đường dẫn này sẽ nằm trên máy ảo Ubuntu (bạn cần tạo thư mục này trên Ubuntu)
+            path: /opt/papers
+            type: DirectoryOrCreate

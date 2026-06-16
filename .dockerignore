@@ -1,0 +1,5 @@
+model_data/
+chroma_data/
+papers/
+__pycache__/
+.env

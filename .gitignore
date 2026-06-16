@@ -1,0 +1,7 @@
+__pycache__/
+model_data/
+sql_data/
+papers/
+*.bak
+*.pdf
+generated_test_queries*.txt
