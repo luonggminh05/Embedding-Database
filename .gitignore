@@ -1,7 +1,12 @@
 __pycache__/
+.env.ps1
 model_data/
 sql_data/
 papers/
 *.bak
 *.pdf
 generated_test_queries*.txt
+
+src/**/bin/
+src/**/obj/
+src/**/publish*/

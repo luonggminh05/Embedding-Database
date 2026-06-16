@@ -5,7 +5,7 @@ import statistics
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import requests
 
@@ -15,58 +15,53 @@ THREAD_LOCAL = threading.local()
 
 QUESTION_PRESETS = {
     "phap_luat": [
-        "Phap luat la gi va co nhung dac trung nao?",
-        "Quy pham phap luat gom nhung bo phan nao?",
-        "Quan he phap luat la gi?",
-        "Chu the cua quan he phap luat bao gom nhung ai?",
-        "Nang luc phap luat va nang luc hanh vi khac nhau nhu the nao?",
-        "Vi pham phap luat la gi va co cac dau hieu nao?",
-        "Trach nhiem phap ly la gi?",
-        "Cac hinh thuc thuc hien phap luat gom nhung gi?",
-        "Nha nuoc phap quyen xa hoi chu nghia Viet Nam co dac diem nao?",
-        "He thong phap luat Viet Nam gom nhung nganh luat nao?",
-        "Hien phap co vai tro gi trong he thong phap luat?",
-        "Luat hanh chinh dieu chinh nhung quan he nao?",
-        "Luat hinh su quy dinh ve van de gi?",
-        "Luat dan su dieu chinh nhung quan he nao?",
-        "Quyen va nghia vu co ban cua cong dan duoc quy dinh nhu the nao?",
-        "Khach the cua vi pham phap luat la gi?",
-        "Mat khach quan cua vi pham phap luat gom nhung yeu to nao?",
-        "Loi co y va loi vo y khac nhau nhu the nao?",
-        "Phan biet vi pham hanh chinh va toi pham",
-        "Cac kieu nha nuoc trong lich su gom nhung kieu nao?",
+        "Pháp luật là gì và có những đặc trưng nào?",
+        "Quy phạm pháp luật gồm những bộ phận nào?",
+        "Quan hệ pháp luật là gì?",
+        "Chủ thể của quan hệ pháp luật bao gồm những ai?",
+        "Năng lực pháp luật và năng lực hành vi khác nhau như thế nào?",
+        "Vi phạm pháp luật là gì và có các dấu hiệu nào?",
+        "Trách nhiệm pháp lý là gì?",
+        "Các hình thức thực hiện pháp luật gồm những gì?",
+        "Nhà nước pháp quyền xã hội chủ nghĩa Việt Nam có đặc điểm nào?",
+        "Hệ thống pháp luật Việt Nam gồm những ngành luật nào?",
+        "Hiến pháp có vai trò gì trong hệ thống pháp luật?",
+        "Luật hành chính điều chỉnh những quan hệ nào?",
+        "Luật hình sự quy định về vấn đề gì?",
+        "Luật dân sự điều chỉnh những quan hệ nào?",
+        "Quyền và nghĩa vụ cơ bản của công dân được quy định như thế nào?",
+        "Khách thể của vi phạm pháp luật là gì?",
+        "Mặt khách quan của vi phạm pháp luật gồm những yếu tố nào?",
+        "Lỗi cố ý và lỗi vô ý khác nhau như thế nào?",
+        "Phân biệt vi phạm hành chính và tội phạm",
+        "Các kiểu nhà nước trong lịch sử gồm những kiểu nào?",
     ],
     "mang_may_tinh": [
-        "Mang may tinh la gi?",
-        "Mo hinh OSI gom may tang va chuc nang tung tang la gi?",
-        "Mo hinh TCP IP khac OSI nhu the nao?",
-        "Tang vat ly trong OSI co chuc nang gi?",
-        "Tang lien ket du lieu dam nhan nhiem vu gi?",
-        "Dia chi MAC la gi?",
-        "Dia chi IP la gi?",
-        "Phan biet IPv4 va IPv6",
-        "Subnet mask dung de lam gi?",
-        "Cach tinh subnet trong mang may tinh",
-        "Router va switch khac nhau nhu the nao?",
-        "Giao thuc TCP va UDP khac nhau o dau?",
-        "DNS co chuc nang gi?",
-        "DHCP hoat dong nhu the nao?",
-        "HTTP va HTTPS khac nhau nhu the nao?",
-        "ARP la gi va dung de lam gi?",
-        "ICMP duoc su dung trong truong hop nao?",
-        "Cong dung cua NAT trong mang may tinh",
-        "Phan biet LAN WAN MAN",
-        "Cac bien phap bao mat mang co ban la gi?",
+        "Mạng máy tính là gì?",
+        "Mô hình OSI gồm mấy tầng và chức năng từng tầng là gì?",
+        "Mô hình TCP/IP khác OSI như thế nào?",
+        "Tầng vật lý trong OSI có chức năng gì?",
+        "Tầng liên kết dữ liệu đảm nhận nhiệm vụ gì?",
+        "Địa chỉ MAC là gì?",
+        "Địa chỉ IP là gì?",
+        "Phân biệt IPv4 và IPv6",
+        "Subnet mask dùng để làm gì?",
+        "Cách tính subnet trong mạng máy tính",
+        "Router và switch khác nhau như thế nào?",
+        "Giao thức TCP và UDP khác nhau ở đâu?",
+        "DNS có chức năng gì?",
+        "DHCP hoạt động như thế nào?",
+        "HTTP và HTTPS khác nhau như thế nào?",
+        "ARP là gì và dùng để làm gì?",
+        "ICMP được sử dụng trong trường hợp nào?",
+        "Công dụng của NAT trong mạng máy tính",
+        "Phân biệt LAN WAN MAN",
+        "Các biện pháp bảo mật mạng cơ bản là gì?",
     ],
 }
 
 
-def send_request(
-    url: str,
-    query: str,
-    top_k: int,
-    timeout: float,
-) -> Tuple[bool, int, float, str]:
+def send_request(url: str, query: str, top_k: int, timeout: float) -> Tuple[bool, int, float, str]:
     payload = {"query": query, "top_k": top_k}
     session = getattr(THREAD_LOCAL, "session", None)
     if session is None:
@@ -101,23 +96,11 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description="Load test POST /db/search")
-    parser.add_argument(
-        "--url",
-        default="http://192.168.18.129:30001/db/search",
-        help="Search endpoint URL",
-    )
+    parser.add_argument("--url", default="http://192.168.18.129:30001/db/search", help="Search endpoint URL")
     parser.add_argument("--requests", type=int, default=10000, help="Total requests")
     parser.add_argument("--concurrency", type=int, default=50, help="Parallel workers")
-    parser.add_argument(
-        "--query",
-        default=None,
-        help="Use one fixed search query instead of random preset questions",
-    )
-    parser.add_argument(
-        "--queries-file",
-        default=None,
-        help="Read one search query per line from a UTF-8 text file",
-    )
+    parser.add_argument("--query", default=None, help="Use one fixed search query instead of random preset questions")
+    parser.add_argument("--queries-file", default=None, help="Read one search query per line from a UTF-8 text file")
     parser.add_argument(
         "--subject",
         choices=["all", "phap_luat", "mang_may_tinh"],
@@ -127,12 +110,7 @@ def main() -> int:
     parser.add_argument("--top-k", type=int, default=5, help="top_k value")
     parser.add_argument("--timeout", type=float, default=30.0, help="Request timeout seconds")
     parser.add_argument("--progress-every", type=int, default=500, help="Progress interval")
-    parser.add_argument(
-        "--selection",
-        choices=["random", "cycle"],
-        default="random",
-        help="How to select queries for each request",
-    )
+    parser.add_argument("--selection", choices=["random", "cycle"], default="random", help="Query selection strategy")
     args = parser.parse_args()
 
     if args.queries_file:
@@ -156,8 +134,7 @@ def main() -> int:
 
     print(
         f"Sending {args.requests} requests to {args.url} "
-        f"with concurrency={args.concurrency}, timeout={args.timeout}s, "
-        f"questions={len(queries)}"
+        f"with concurrency={args.concurrency}, timeout={args.timeout}s, questions={len(queries)}"
     )
     print("Sample questions:")
     for question in queries[:5]:
@@ -169,10 +146,7 @@ def main() -> int:
         selected_queries = [random.choice(queries) for _ in range(args.requests)]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
-        futures = [
-            executor.submit(send_request, args.url, query, args.top_k, args.timeout)
-            for query in selected_queries
-        ]
+        futures = [executor.submit(send_request, args.url, query, args.top_k, args.timeout) for query in selected_queries]
 
         for index, future in enumerate(concurrent.futures.as_completed(futures), start=1):
             ok, status_code, elapsed, error = future.result()
@@ -189,10 +163,7 @@ def main() -> int:
             if args.progress_every > 0 and index % args.progress_every == 0:
                 total_elapsed = time.perf_counter() - started
                 rps = index / total_elapsed if total_elapsed else 0
-                print(
-                    f"Progress {index}/{args.requests} | "
-                    f"ok={success_count} fail={failure_count} rps={rps:.2f}"
-                )
+                print(f"Progress {index}/{args.requests} | ok={success_count} fail={failure_count} rps={rps:.2f}")
 
     total_elapsed = time.perf_counter() - started
     rps = args.requests / total_elapsed if total_elapsed else 0

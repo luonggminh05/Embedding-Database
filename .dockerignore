@@ -3,3 +3,6 @@ chroma_data/
 papers/
 __pycache__/
 .env
+
+src/**/bin/
+src/**/obj/

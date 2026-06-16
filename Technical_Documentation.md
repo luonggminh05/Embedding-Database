@@ -1,4 +1,4 @@
-# 1. Tài liệu Embedding Model
+﻿# 1. Tài liệu Embedding Model
 
 ## 1. Mục tiêu
 
@@ -11,7 +11,7 @@
 Client (Postman/Web)
    |
    v
-API Server (FastAPI)
+API Server (ASP.NET Core)
    |
    v
 Embedding Server (TEI Pod)
@@ -26,7 +26,7 @@ SQL Server 2025 (Vector Database)
 - **Engine:** Text Embeddings Inference (TEI) của HuggingFace. Viết bằng ngôn ngữ Rust.
 - **Docker Image:** `ghcr.io/huggingface/text-embeddings-inference:cpu-1.2`
 - **Embedding Model:** `BAAI/bge-m3` (Model hỗ trợ đa ngôn ngữ, sinh ra vector 1024 chiều, hiểu Tiếng Việt cực tốt).
-- **Ngôn ngữ kết nối:** Python (FastAPI).
+- **Ngôn ngữ kết nối:** C# (ASP.NET Core) cho API trung tâm; Python giữ lại cho File Watcher doc loader.
 
 ## 4. Quy trình hoạt động
 
@@ -133,7 +133,7 @@ curl -X POST http://192.168.18.129:30080/embed \
 ## 2. Kiến trúc
 
 ```text
-API Server (Python)
+API Server (C# / .NET)
      |
      v
  SQL Service (ClusterIP: 1433)
@@ -187,7 +187,10 @@ spec:
             - name: ACCEPT_EULA
               value: "Y"
             - name: MSSQL_SA_PASSWORD
-              value: "YourStrong!Passw0rd"
+              valueFrom:
+                secretKeyRef:
+                  name: sqlserver-secret
+                  key: sa-password
           volumeMounts:
             - name: sql-data
               mountPath: /var/opt/mssql
@@ -213,7 +216,7 @@ kubectl logs -l app=sqlserver
 Kết nối thử bằng công cụ:
 
 - Dùng SQL Server Management Studio (SSMS) hoặc VS Code mssql extension.
-- Server Name: `192.168.18.129,31433` (User: `sa`, Pass: `YourStrong!Passw0rd`).
+- Server Name: `192.168.18.129,31433` (User: `sa`, password lấy từ Secret `sqlserver-secret` hoặc biến môi trường `SQLSERVER_SA_PASSWORD` khi deploy).
 
 ## 7. Sao lưu và phục hồi
 
@@ -254,19 +257,19 @@ scp D:\TaiLieu\* luonggminh05@192.168.18.129:/opt/papers/
 
 ## 2. Cập nhật Code & Deploy Hệ thống
 
-Để đơn giản hóa quá trình cập nhật mã nguồn (FastAPI, File Watcher) và tự động build các Docker Image (bao gồm cả Image SQL Server có Full-Text Search), bạn có thể sử dụng script PowerShell đã được chuẩn bị sẵn.
+Để đơn giản hóa quá trình cập nhật mã nguồn (ASP.NET Core, File Watcher) và tự động build các Docker Image (bao gồm cả Image SQL Server có Full-Text Search), bạn có thể sử dụng script PowerShell đã được chuẩn bị sẵn.
 
 **Mở PowerShell trên Windows và chạy lệnh:**
 
 ```powershell
-.\deploy_fts.ps1
+.\deploy_dotnet.ps1
 ```
 
 Script này sẽ tự động thực hiện các bước sau:
 
-1. Copy các file code mới (`main.py`, `ingest_watcher.py`, `Dockerfile*`, `requirements.txt`, `yaml`...) sang máy ảo Ubuntu.
-2. Xóa bảng `Documents` cũ (nếu có cập nhật schema).
-3. Build lại các Docker Image: `sqlserver-fts:latest`, `api_server:latest`, `file_watcher:latest` và nạp vào Kubernetes.
-4. Deploy file `sqlserver.yaml` mới.
-5. Khởi động lại toàn bộ các Pod liên quan (`sqlserver`, `api-server`, `file-watcher`) để nhận thay đổi.
+1. Copy các file code mới (`src/RagApi`, `ingest_watcher.py`, `Dockerfile*`, `requirements.txt`, `yaml`...) sang máy ảo Ubuntu.
+2. Tạo/cập nhật Kubernetes Secret `sqlserver-secret` từ biến môi trường `SQLSERVER_SA_PASSWORD` hoặc mật khẩu bạn nhập khi chạy script.
+3. Build lại các Docker Image: `sqlserver-fts:latest`, `rag_api_dotnet:latest`, `file_watcher:latest` và nạp vào Kubernetes.
+4. Deploy các manifest `tei.yaml`, `sqlserver.yaml`, `api-server-dotnet.yaml`, `file-watcher.yaml`.
+5. Khởi động lại các Pod ứng dụng (`api-server`, `file-watcher`) để nhận thay đổi.
    Sau khi chạy xong, hãy đợi khoảng 30 giây để SQL Server khởi động hoàn tất trước khi sử dụng.

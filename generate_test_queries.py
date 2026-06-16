@@ -37,8 +37,7 @@ STUDENT_ID_RE = re.compile(r"\b\d{7,}\b")
 
 
 def normalize_text(text: str) -> str:
-    text = re.sub(r"\s+", " ", text or "").strip()
-    return text
+    return re.sub(r"\s+", " ", text or "").strip()
 
 
 def read_pdf(path: Path) -> List[str]:
@@ -54,7 +53,7 @@ def read_pdf(path: Path) -> List[str]:
 def read_docx(path: Path) -> List[str]:
     doc = Document(str(path))
     paragraphs = [normalize_text(p.text) for p in doc.paragraphs]
-    return [p for p in paragraphs if p]
+    return [paragraph for paragraph in paragraphs if paragraph]
 
 
 def read_xlsx(path: Path) -> List[str]:
@@ -161,8 +160,6 @@ def main() -> int:
     )
 
     for path in paths:
-        if not path.is_file():
-            continue
         texts = read_supported_file(path)
         if texts:
             per_file_counts[path.name] = len(texts)

@@ -26,6 +26,6 @@ spec:
       volumes:
         - name: papers-volume
           hostPath:
-            # Đường dẫn này sẽ nằm trên máy ảo Ubuntu (bạn cần tạo thư mục này trên Ubuntu)
+            # This path is on the Ubuntu VM that runs the Kubernetes node.
             path: /opt/papers
             type: DirectoryOrCreate
