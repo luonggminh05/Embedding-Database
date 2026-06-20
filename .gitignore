@@ -10,3 +10,5 @@ generated_test_queries*.txt
 src/**/bin/
 src/**/obj/
 src/**/publish*/
+.pycache-codex/
+.codex-build/
