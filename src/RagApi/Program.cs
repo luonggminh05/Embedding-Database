@@ -1,6 +1,8 @@
 using RagApi.Data;
 using RagApi.Options;
 using RagApi.Services;
+using RagApi.Hubs;
+using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,11 +19,26 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        var frontendUrl = builder.Configuration["UpRAG:FrontendUrl"] ?? "http://localhost:4200";
+        policy.WithOrigins(frontendUrl)
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
+
+builder.Services.AddSignalR();
+
+var lmStudioUrl = builder.Configuration["UpRAG:LMStudioEndpoint"] ?? "http://127.0.0.1:1234/v1";
+var modelId = builder.Configuration["UpRAG:ModelId"] ?? "meta-llama-3.1-8b-instruct";
+var apiKey = builder.Configuration["UpRAG:ApiKey"] ?? "EMPTY";
+
+var kernelBuilder = Kernel.CreateBuilder();
+kernelBuilder.AddOpenAIChatCompletion(
+    modelId: modelId,
+    apiKey: apiKey,
+    endpoint: new Uri(lmStudioUrl));
+builder.Services.AddSingleton(kernelBuilder.Build());
 
 builder.Services.Configure<TeiOptions>(builder.Configuration.GetSection("Tei"));
 builder.Services.Configure<SqlServerOptions>(builder.Configuration.GetSection("SqlServer"));
@@ -51,5 +68,6 @@ app.UseSwaggerUI(c =>
 app.UseCors("AllowAll");
 
 app.MapControllers();
+app.MapHub<ChatHub>("/chathub");
 
 app.Run();

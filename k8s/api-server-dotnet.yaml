@@ -32,6 +32,8 @@ spec:
                   key: connection-string
             - name: Search__TopKMax
               value: "50"
+            - name: Search__ChatTopK
+              value: "3"
             - name: Search__VectorCandidateCount
               value: "200"
             - name: Search__RrfConstant

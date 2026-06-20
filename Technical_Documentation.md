@@ -1,4 +1,4 @@
-﻿# 1. Tài liệu Embedding Model
+# 1. Tài liệu Embedding Model
 
 ## 1. Mục tiêu
 
@@ -273,3 +273,4 @@ Script này sẽ tự động thực hiện các bước sau:
 4. Deploy các manifest `tei.yaml`, `sqlserver.yaml`, `api-server-dotnet.yaml`, `file-watcher.yaml`.
 5. Khởi động lại các Pod ứng dụng (`api-server`, `file-watcher`) để nhận thay đổi.
    Sau khi chạy xong, hãy đợi khoảng 30 giây để SQL Server khởi động hoàn tất trước khi sử dụng.
+

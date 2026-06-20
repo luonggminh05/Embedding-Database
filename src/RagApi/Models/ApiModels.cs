@@ -54,6 +54,7 @@ public sealed record Citation(
 
 public sealed record SearchResponse(
     [property: JsonPropertyName("ids")] IReadOnlyList<IReadOnlyList<string>> Ids,
+    [property: JsonPropertyName("documents")] IReadOnlyList<IReadOnlyList<string>> Documents,
     [property: JsonPropertyName("metadatas")] IReadOnlyList<IReadOnlyList<JsonElement>> Metadatas,
     [property: JsonPropertyName("distances")] IReadOnlyList<IReadOnlyList<double>> Distances,
     [property: JsonPropertyName("citations")] IReadOnlyList<IReadOnlyList<Citation>> Citations);

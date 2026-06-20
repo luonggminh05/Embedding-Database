@@ -6,13 +6,12 @@ from urllib.parse import urlparse
 
 import httpx
 from langchain_community.document_loaders import (
-    CSVLoader,
     PyPDFLoader,
     TextLoader,
-    UnstructuredExcelLoader,
     UnstructuredPowerPointLoader,
     UnstructuredWordDocumentLoader,
 )
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic_settings import BaseSettings
 from watchdog.events import FileSystemEventHandler
@@ -62,12 +61,9 @@ def load_document(file_path: str):
             return PyPDFLoader(file_path).load()
         if file_name.endswith(".docx"):
             return UnstructuredWordDocumentLoader(file_path).load()
-        if file_name.endswith((".xlsx", ".xls")):
-            return UnstructuredExcelLoader(file_path).load()
-        if file_name.endswith(".pptx"):
-            return UnstructuredPowerPointLoader(file_path).load()
-        if file_name.endswith(".csv"):
-            return CSVLoader(file_path).load()
+        # Excel and CSV are handled in process_and_ingest
+        if file_name.endswith((".xlsx", ".xls", ".csv")):
+            return []
         if file_name.endswith(".txt"):
             return TextLoader(file_path, encoding="utf-8").load()
 
@@ -78,15 +74,74 @@ def load_document(file_path: str):
         return []
 
 
+def format_cell_value(value):
+    if hasattr(value, "item"):
+        value = value.item()
+
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+
+    return str(value).strip()
+
+
+def normalize_column_name(name: str) -> str:
+    return " ".join(str(name).strip().lower().split())
+
+
+def build_tabular_row_text(row_dict: dict) -> str:
+    normalized = {normalize_column_name(key): format_cell_value(value) for key, value in row_dict.items()}
+    enriched_fields = []
+
+    last_name = normalized.get("họ") or normalized.get("ho")
+    first_name = normalized.get("tên") or normalized.get("ten")
+    if last_name and first_name and "họ tên" not in normalized and "ho ten" not in normalized:
+        enriched_fields.append(("Họ tên", f"{last_name} {first_name}"))
+
+    for key, value in row_dict.items():
+        enriched_fields.append((str(key).strip(), format_cell_value(value)))
+
+    return ", ".join([f"{key}: {value}" for key, value in enriched_fields if value])
+
+
 def process_and_ingest(file_path: str):
     logger.info("Detected file: %s", file_path)
-    docs = load_document(file_path)
-    if not docs:
-        return
+    file_name = os.path.basename(file_path).lower()
 
-    logger.info("Loaded %s pages/chunks. Splitting into chunks...", len(docs))
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100)
-    splits = text_splitter.split_documents(docs)
+    splits = []
+    
+    # Xử lý riêng cho Excel/CSV: MỖI DÒNG LÀ 1 CHUNK
+    if file_name.endswith((".xlsx", ".xls", ".csv")):
+        try:
+            import pandas as pd
+            if file_name.endswith(".csv"):
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
+                
+            for index, row in df.iterrows():
+                row_dict = row.dropna().to_dict()
+                row_text = build_tabular_row_text(row_dict)
+                splits.append(Document(page_content=row_text, metadata={"source": file_name, "row": index}))
+                
+        except Exception as exc:
+            logger.error("Error parsing tabular file %s: %s", file_name, exc)
+            return
+            
+        if not splits:
+            logger.warning("No data found in tabular file %s.", file_name)
+            return
+            
+        logger.info("Loaded %s rows from tabular file as chunks.", len(splits))
+        
+    else:
+        # Xử lý cho các loại file tài liệu thường (PDF, Word, TXT...)
+        docs = load_document(file_path)
+        if not docs:
+            return
+
+        logger.info("Loaded %s pages/chunks. Splitting into chunks...", len(docs))
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100)
+        splits = text_splitter.split_documents(docs)
 
     if not splits:
         logger.warning("No text found to ingest.")

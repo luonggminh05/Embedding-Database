@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
@@ -114,11 +114,16 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         var queryEmbeddingJson = JsonSerializer.Serialize(queryEmbedding);
         var fullTextReady = await HasActiveFullTextIndexAsync(cancellationToken);
 
+        var exactKeyword = System.Text.RegularExpressions.Regex.Match(query, @"\b\d{6,}\b").Success 
+            ? System.Text.RegularExpressions.Regex.Match(query, @"\b\d{6,}\b").Value 
+            : "";
+
         var sql = fullTextReady
             ? """
                 WITH VectorBase AS (
                     SELECT
                         id,
+                        document,
                         metadata,
                         VECTOR_DISTANCE('cosine', embedding, CAST(CAST(@queryEmbeddingJson AS VARCHAR(MAX)) AS VECTOR(1024))) AS distance
                     FROM Documents
@@ -126,6 +131,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                 VectorSearch AS (
                     SELECT TOP (@vectorCandidateCount)
                         id,
+                        document,
                         metadata,
                         distance,
                         ROW_NUMBER() OVER (ORDER BY distance ASC) AS vector_rank
@@ -133,20 +139,37 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                     ORDER BY distance ASC
                 ),
                 KeywordSearch AS (
-                    SELECT [KEY] AS id,
+                    SELECT TOP (@vectorCandidateCount)
+                           [KEY] AS id,
                            ROW_NUMBER() OVER (ORDER BY [RANK] DESC) AS keyword_rank
                     FROM FREETEXTTABLE(Documents, document, @query)
                 ),
+                ExactMatchSearch AS (
+                    SELECT id, 10000 AS exact_score
+                    FROM Documents
+                    WHERE @exactKeyword <> '' AND document LIKE '%' + @exactKeyword + '%'
+                ),
+                CandidateIds AS (
+                    SELECT id FROM VectorSearch
+                    UNION
+                    SELECT id FROM KeywordSearch
+                    UNION
+                    SELECT id FROM ExactMatchSearch
+                ),
                 RankedScores AS (
-                    SELECT v.id, v.metadata, v.distance,
+                    SELECT c.id, d.document, d.metadata, v.distance,
                            v.vector_rank,
-                           k.keyword_rank
-                    FROM VectorSearch v
-                    LEFT JOIN KeywordSearch k ON v.id = k.id
+                           k.keyword_rank,
+                           e.exact_score
+                    FROM CandidateIds c
+                    INNER JOIN Documents d ON d.id = c.id
+                    LEFT JOIN VectorSearch v ON v.id = c.id
+                    LEFT JOIN KeywordSearch k ON k.id = c.id
+                    LEFT JOIN ExactMatchSearch e ON e.id = c.id
                 )
                 SELECT TOP (@topK)
-                    id, metadata, distance,
-                    (1.0 / (@rrfConstant + vector_rank)) + (1.0 / (@rrfConstant + ISNULL(keyword_rank, 9999))) AS RRF_Score
+                    id, document, metadata, distance,
+                    (1.0 / (@rrfConstant + ISNULL(vector_rank, 9999))) + (1.0 / (@rrfConstant + ISNULL(keyword_rank, 9999))) + ISNULL(exact_score, 0) AS RRF_Score
                 FROM RankedScores
                 ORDER BY RRF_Score DESC;
                 """
@@ -154,26 +177,45 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                 WITH VectorBase AS (
                     SELECT
                         id,
+                        document,
                         metadata,
                         VECTOR_DISTANCE('cosine', embedding, CAST(CAST(@queryEmbeddingJson AS VARCHAR(MAX)) AS VECTOR(1024))) AS distance
                     FROM Documents
                 ),
                 VectorSearch AS (
-                    SELECT TOP (@topK)
+                    SELECT TOP (@vectorCandidateCount)
                         id,
+                        document,
                         metadata,
                         distance,
                         ROW_NUMBER() OVER (ORDER BY distance ASC) AS vector_rank
                     FROM VectorBase
                     ORDER BY distance ASC
+                ),
+                ExactMatchSearch AS (
+                    SELECT id, 10000 AS exact_score
+                    FROM Documents
+                    WHERE @exactKeyword <> '' AND document LIKE '%' + @exactKeyword + '%'
+                ),
+                CandidateIds AS (
+                    SELECT id FROM VectorSearch
+                    UNION
+                    SELECT id FROM ExactMatchSearch
+                ),
+                RankedScores AS (
+                    SELECT c.id, d.document, d.metadata, v.distance,
+                           v.vector_rank,
+                           e.exact_score
+                    FROM CandidateIds c
+                    INNER JOIN Documents d ON d.id = c.id
+                    LEFT JOIN VectorSearch v ON v.id = c.id
+                    LEFT JOIN ExactMatchSearch e ON e.id = c.id
                 )
-                SELECT
-                    id,
-                    metadata,
-                    distance,
-                    (1.0 / (@rrfConstant + vector_rank)) AS RRF_Score
-                FROM VectorSearch
-                ORDER BY vector_rank ASC;
+                SELECT TOP (@topK)
+                    id, document, metadata, distance,
+                    (1.0 / (@rrfConstant + ISNULL(vector_rank, 9999))) + ISNULL(exact_score, 0) AS RRF_Score
+                FROM RankedScores
+                ORDER BY RRF_Score DESC;
                 """;
 
         if (!fullTextReady)
@@ -183,6 +225,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
 
         var stopwatch = Stopwatch.StartNew();
         var ids = new List<string>();
+        var documents = new List<string>();
         var metadatas = new List<JsonElement>();
         var distances = new List<double>();
         var citations = new List<Citation>();
@@ -196,23 +239,26 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         AddParameter(command, "@topK", SqlDbType.Int, 0, topK);
         AddParameter(command, "@vectorCandidateCount", SqlDbType.Int, 0, vectorCandidateCount);
         AddParameter(command, "@rrfConstant", SqlDbType.Float, 0, rrfConstant);
+        AddParameter(command, "@exactKeyword", SqlDbType.NVarChar, -1, exactKeyword);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
             var id = reader.GetString(reader.GetOrdinal("id"));
+            var document = reader.GetString(reader.GetOrdinal("document"));
             var metadata = ParseMetadata(reader.GetString(reader.GetOrdinal("metadata")));
-            var distance = Convert.ToDouble(reader["distance"]);
+            var distance = reader["distance"] == DBNull.Value ? double.MaxValue : Convert.ToDouble(reader["distance"]);
             var score = Convert.ToDouble(reader["RRF_Score"]);
 
             ids.Add(id);
+            documents.Add(document);
             metadatas.Add(metadata);
             distances.Add(distance);
             citations.Add(BuildCitation(id, metadata, score));
         }
 
         _logger.LogInformation("SQL search finished in {ElapsedMs}ms.", stopwatch.ElapsedMilliseconds);
-        return new SearchResponse([ids], [metadatas], [distances], [citations]);
+        return new SearchResponse([ids], [documents], [metadatas], [distances], [citations]);
     }
 
     private async Task EnsureFullTextAsync(CancellationToken cancellationToken)

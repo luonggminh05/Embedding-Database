@@ -1,0 +1,86 @@
+<div class="gemini-layout">
+  <div class="header">
+    <div class="header-logo">
+      <h2>Chatbot</h2>
+      <span class="badge" *ngIf="!chatService.isResponding()">Demo</span>
+    </div>
+    <div class="header-actions">
+      <div class="user-profile">U</div>
+    </div>
+  </div>
+
+  <div class="chat-container" #chatContainer>
+    <!-- Welcome Screen -->
+    <div *ngIf="chatService.messages().length === 0" class="welcome-screen">
+      <div class="greeting">
+        <span class="gradient-text">Hello,</span>
+        <span class="sub-greeting">How can I help you today?</span>
+      </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div class="message-list">
+      <div *ngFor="let msg of chatService.messages()" class="message-row" [class.user]="msg.role === 'user'">
+        <div class="avatar-container" *ngIf="msg.role !== 'user'">
+          <img src="cube.png" alt="Bot Avatar" class="bot-avatar">
+        </div>
+        <div class="avatar-container user-avatar" *ngIf="msg.role === 'user'">
+          <div class="user-profile small">U</div>
+        </div>
+        <div class="message-content">
+          <div class="text-content">{{ msg.content }}</div>
+          <!-- Citations UI -->
+          <div class="citations-container" *ngIf="msg.citations && msg.citations.length > 0">
+            <div class="citation-title">Nguồn tài liệu:</div>
+            <div class="citation-badges">
+              <span class="citation-badge" *ngFor="let cit of msg.citations" [title]="cit.source">
+                📄 {{ cit.source.split('\\').pop().split('/').pop() | slice:0:30 }}
+                <span *ngIf="cit.page"> (Trang {{cit.page}})</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Streaming Message -->
+      <div *ngIf="chatService.isResponding() || chatService.currentStreamedMessage()" class="message-row">
+        <div class="avatar-container">
+          <img src="cube.png" alt="Bot Avatar" class="bot-avatar spinning">
+        </div>
+        <div class="message-content">
+          <div class="text-content">
+            {{ chatService.currentStreamedMessage() }}<span *ngIf="chatService.isResponding()" class="cursor-blink"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-container">
+    <form (ngSubmit)="sendMessage()" class="input-form">
+      <div class="input-wrapper">
+        <input type="file" #fileInput hidden (change)="onFileSelected($event)">
+        <button type="button" class="icon-btn" (click)="fileInput.click()" [disabled]="isUploading || chatService.isResponding()" title="Upload Document">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+          </svg>
+        </button>
+        <textarea 
+          [(ngModel)]="userInput" 
+          name="userInput"
+          placeholder="Enter a prompt here" 
+          [disabled]="chatService.isResponding()"
+          rows="1"
+          (keydown.enter)="sendMessage(); $event.preventDefault()"
+        ></textarea>
+        <button type="submit" class="icon-btn send-btn" [class.active]="userInput.trim()" [disabled]="!userInput.trim() || chatService.isResponding()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+      <div class="disclaimer">Gemini may display inaccurate info, including about people, so double-check its responses.</div>
+    </form>
+  </div>
+</div>

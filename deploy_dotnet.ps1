@@ -36,17 +36,17 @@ $RemoteConnectionString = "'$SqlConnectionString'"
 
 Write-Host "1. Copying deployment files to VM..."
 ssh -t $Vm "mkdir -p $RemoteApp/src $RemoteApp/k8s"
-scp -r f:\BKU\Intern\Host\src\RagApi $Vm`:$RemoteApp/src/
-scp f:\BKU\Intern\Host\.dockerignore $Vm`:$RemoteApp/
-scp f:\BKU\Intern\Host\Dockerfile.dotnet $Vm`:$RemoteApp/
-scp f:\BKU\Intern\Host\Dockerfile.sql $Vm`:$RemoteApp/
-scp f:\BKU\Intern\Host\Dockerfile $Vm`:$RemoteApp/
-scp f:\BKU\Intern\Host\requirements.txt $Vm`:$RemoteApp/
-scp f:\BKU\Intern\Host\ingest_watcher.py $Vm`:$RemoteApp/
-scp f:\BKU\Intern\Host\k8s\tei.yaml $Vm`:$RemoteApp/k8s/
-scp f:\BKU\Intern\Host\k8s\sqlserver.yaml $Vm`:$RemoteApp/k8s/
-scp f:\BKU\Intern\Host\k8s\api-server-dotnet.yaml $Vm`:$RemoteApp/k8s/
-scp f:\BKU\Intern\Host\k8s\file-watcher.yaml $Vm`:$RemoteApp/k8s/
+scp -r "$PSScriptRoot\src\RagApi" $Vm`:$RemoteApp/src/
+scp "$PSScriptRoot\.dockerignore" $Vm`:$RemoteApp/
+scp "$PSScriptRoot\Dockerfile.dotnet" $Vm`:$RemoteApp/
+scp "$PSScriptRoot\Dockerfile.sql" $Vm`:$RemoteApp/
+scp "$PSScriptRoot\Dockerfile" $Vm`:$RemoteApp/
+scp "$PSScriptRoot\requirements.txt" $Vm`:$RemoteApp/
+scp "$PSScriptRoot\ingest_watcher.py" $Vm`:$RemoteApp/
+scp "$PSScriptRoot\k8s\tei.yaml" $Vm`:$RemoteApp/k8s/
+scp "$PSScriptRoot\k8s\sqlserver.yaml" $Vm`:$RemoteApp/k8s/
+scp "$PSScriptRoot\k8s\api-server-dotnet.yaml" $Vm`:$RemoteApp/k8s/
+scp "$PSScriptRoot\k8s\file-watcher.yaml" $Vm`:$RemoteApp/k8s/
 
 Write-Host "2. Creating or updating Kubernetes Secret..."
 ssh -t $Vm "$Kubectl create secret generic sqlserver-secret --from-literal=sa-password=$RemoteSqlPassword --from-literal=connection-string=$RemoteConnectionString --dry-run=client -o yaml | $Kubectl apply -f -"
