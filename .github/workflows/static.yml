@@ -3,8 +3,6 @@ name: Deploy Angular to GitHub Pages
 on:
   push:
     branches: ["main"]
-
-  # Cho phép chạy thủ công từ tab Actions
   workflow_dispatch:
 
 permissions:
@@ -29,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18 # Hoặc phiên bản Node bạn đang dùng ở máy local
+          node-version: 18
 
       - name: Install dependencies & Build Angular
         run: |
