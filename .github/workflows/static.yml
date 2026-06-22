@@ -27,12 +27,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20 # <-- Đã sửa thành Node 20 để đáp ứng yêu cầu của Angular CLI
 
       - name: Install dependencies & Build Angular
         run: |
           cd Frontend
-          npm install
+          npm install --legacy-peer-deps # Thêm flag này để tránh kẹt lỗi "dependency review" của npm
           npx ng build --configuration production --base-href /Embedding-Database/
 
       - name: Setup Pages
