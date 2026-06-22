@@ -43,9 +43,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Chỉ định đường dẫn tới thư mục sản phẩm sau khi build (thường là dist/<tên-app>)
-          # Bạn có thể check lại trong file angular.json ở local mục "outputPath" để điền chính xác
-          path: 'Frontend/dist/frontend/browser' 
+          path: 'Frontend/dist/Frontend/browser'
 
       - name: Deploy to GitHub Pages
         id: deployment
