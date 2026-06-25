@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -27,7 +27,7 @@ public sealed class TeiEmbeddingService : ITeiEmbeddingService
         _logger = logger;
         _searchOptions = searchOptions.Value;
         _httpClient.BaseAddress = new Uri(teiOptions.Value.Url.TrimEnd('/') + "/");
-        _httpClient.Timeout = TimeSpan.FromSeconds(30);
+        _httpClient.Timeout = TimeSpan.FromSeconds(120);
     }
 
     public async Task<IReadOnlyList<IReadOnlyList<float>>> EmbedTextsAsync(IReadOnlyList<string> texts, CancellationToken cancellationToken)

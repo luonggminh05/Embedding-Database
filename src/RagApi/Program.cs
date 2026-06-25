@@ -3,6 +3,8 @@ using RagApi.Options;
 using RagApi.Services;
 using RagApi.Hubs;
 using Microsoft.SemanticKernel;
+using RagApi.Services.Ingestion;
+using RagApi.Services.Ingestion.Parsers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +45,7 @@ builder.Services.AddSingleton(kernelBuilder.Build());
 builder.Services.Configure<TeiOptions>(builder.Configuration.GetSection("Tei"));
 builder.Services.Configure<SqlServerOptions>(builder.Configuration.GetSection("SqlServer"));
 builder.Services.Configure<SearchOptions>(builder.Configuration.GetSection("Search"));
+builder.Services.Configure<IngestionOptions>(builder.Configuration.GetSection("Ingestion"));
 
 var queryCacheSize = builder.Configuration.GetValue<int?>("Search:QueryEmbeddingCacheSize") ?? 1024;
 builder.Services.AddMemoryCache(options =>
@@ -56,6 +59,19 @@ builder.Services.AddMemoryCache(options =>
 builder.Services.AddHttpClient<ITeiEmbeddingService, TeiEmbeddingService>();
 builder.Services.AddSingleton<ISqlDocumentRepository, SqlDocumentRepository>();
 builder.Services.AddHostedService<DatabaseInitializerHostedService>();
+
+// Register Ingestion Services
+builder.Services.AddTransient<IDocumentParser, PdfParser>();
+builder.Services.AddTransient<IDocumentParser, WordParser>();
+builder.Services.AddTransient<IDocumentParser, PowerPointParser>();
+builder.Services.AddTransient<IDocumentParser, TabularParser>();
+builder.Services.AddTransient<IDocumentParser, TextParser>();
+builder.Services.AddSingleton<IOcrService, TesseractOcrService>();
+builder.Services.AddHttpClient<IVisionCaptionService, VisionCaptionService>();
+builder.Services.AddTransient<IDocumentParser, ImageParser>();
+builder.Services.AddTransient<DocumentParser>();
+builder.Services.AddTransient<DocumentIngestionService>();
+builder.Services.AddHostedService<DocumentIngestionWorker>();
 
 var app = builder.Build();
 

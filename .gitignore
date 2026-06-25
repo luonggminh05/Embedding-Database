@@ -1,10 +1,13 @@
 __pycache__/
+.env
 .env.ps1
+.vs/
 model_data/
 sql_data/
 papers/
 *.bak
 *.pdf
+*.docx
 generated_test_queries*.txt
 
 src/**/bin/
@@ -12,3 +15,5 @@ src/**/obj/
 src/**/publish*/
 .pycache-codex/
 .codex-build/
+ragapi.*.log
+.github/agents/

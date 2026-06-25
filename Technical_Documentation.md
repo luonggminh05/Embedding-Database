@@ -26,7 +26,7 @@ SQL Server 2025 (Vector Database)
 - **Engine:** Text Embeddings Inference (TEI) của HuggingFace. Viết bằng ngôn ngữ Rust.
 - **Docker Image:** `ghcr.io/huggingface/text-embeddings-inference:cpu-1.2`
 - **Embedding Model:** `BAAI/bge-m3` (Model hỗ trợ đa ngôn ngữ, sinh ra vector 1024 chiều, hiểu Tiếng Việt cực tốt).
-- **Ngôn ngữ kết nối:** C# (ASP.NET Core) cho API trung tâm; Python giữ lại cho File Watcher doc loader.
+- **Ngôn ngữ kết nối:** C# (ASP.NET Core) đảm nhiệm toàn bộ API Server và Background Worker (Ingestion File Watcher). Tích hợp OCR (Tesseract) và Vision API (LLaVA/OpenAI) trực tiếp bằng C#.
 
 ## 4. Quy trình hoạt động
 
@@ -116,7 +116,7 @@ kubectl get svc embedding-server
 Kiểm tra API có hoạt động không:
 
 ```bash
-curl -X POST http://192.168.18.129:30080/embed \
+curl -X POST http://<vm-ip>:30080/embed \
     -H 'Content-Type: application/json' \
     -d '{"inputs": ["test"]}'
 ```
@@ -200,7 +200,7 @@ spec:
 
 - **Host nội bộ (Trong K8s):** `sqlserver`
 - **Port nội bộ:** `1433`
-- **NodePort (Truy cập từ Windows):** `31433` (IP: `192.168.18.129,31433`)
+- **NodePort (Truy cập từ Windows):** `31433` (IP: `<vm-ip>,31433`)
 - **Database:** `master`
 - **Table:** `Documents` (Có cột `embedding VECTOR(1024)`)
 
@@ -216,7 +216,7 @@ kubectl logs -l app=sqlserver
 Kết nối thử bằng công cụ:
 
 - Dùng SQL Server Management Studio (SSMS) hoặc VS Code mssql extension.
-- Server Name: `192.168.18.129,31433` (User: `sa`, password lấy từ Secret `sqlserver-secret` hoặc biến môi trường `SQLSERVER_SA_PASSWORD` khi deploy).
+- Server Name: `<vm-ip>,31433` (User: `<sql-user>`, password lấy từ Secret `sqlserver-secret` hoặc biến môi trường `SQLSERVER_SA_PASSWORD` khi deploy).
 
 ## 7. Sao lưu và phục hồi
 
@@ -243,21 +243,21 @@ WITH REPLACE
 
 ## 1. Nạp tài liệu mới vào hệ thống
 
-Sử dụng File Watcher để tự động nhận diện file. Để nạp tài liệu (PDF, DOCX, TXT...), copy file đó từ máy Windows sang thư mục `/opt/papers` của máy ảo Ubuntu bằng lệnh `scp`.
+Sử dụng File Watcher (Background Worker trong ASP.NET Core) để tự động nhận diện file. Để nạp tài liệu (PDF, DOCX, TXT, PPTX...), copy file đó từ máy Windows sang thư mục `/opt/papers` của máy ảo Ubuntu bằng lệnh `scp`.
 
 **Mở PowerShell trên Windows và chạy lệnh:**
 
 ```powershell
 # Nạp 1 file
-scp D:\TaiLieu\AI_Research.pdf luonggminh05@192.168.18.129:/opt/papers/
+scp D:\TaiLieu\AI_Research.pdf <username>@<vm-ip>:/opt/papers/
 
 # Nạp toàn bộ file trong folder
-scp D:\TaiLieu\* luonggminh05@192.168.18.129:/opt/papers/
+scp D:\TaiLieu\* <username>@<vm-ip>:/opt/papers/
 ```
 
 ## 2. Cập nhật Code & Deploy Hệ thống
 
-Để đơn giản hóa quá trình cập nhật mã nguồn (ASP.NET Core, File Watcher) và tự động build các Docker Image (bao gồm cả Image SQL Server có Full-Text Search), bạn có thể sử dụng script PowerShell đã được chuẩn bị sẵn.
+Để đơn giản hóa quá trình cập nhật mã nguồn (ASP.NET Core) và tự động build các Docker Image (bao gồm cả Image SQL Server có Full-Text Search), bạn có thể sử dụng script PowerShell đã được chuẩn bị sẵn.
 
 **Mở PowerShell trên Windows và chạy lệnh:**
 
@@ -267,10 +267,10 @@ scp D:\TaiLieu\* luonggminh05@192.168.18.129:/opt/papers/
 
 Script này sẽ tự động thực hiện các bước sau:
 
-1. Copy các file code mới (`src/RagApi`, `ingest_watcher.py`, `Dockerfile*`, `requirements.txt`, `yaml`...) sang máy ảo Ubuntu.
+1. Copy các file code mới (`src/RagApi`, `Dockerfile*`, `yaml`...) sang máy ảo Ubuntu.
 2. Tạo/cập nhật Kubernetes Secret `sqlserver-secret` từ biến môi trường `SQLSERVER_SA_PASSWORD` hoặc mật khẩu bạn nhập khi chạy script.
-3. Build lại các Docker Image: `sqlserver-fts:latest`, `rag_api_dotnet:latest`, `file_watcher:latest` và nạp vào Kubernetes.
-4. Deploy các manifest `tei.yaml`, `sqlserver.yaml`, `api-server-dotnet.yaml`, `file-watcher.yaml`.
-5. Khởi động lại các Pod ứng dụng (`api-server`, `file-watcher`) để nhận thay đổi.
+3. Build lại các Docker Image: `sqlserver-fts:latest`, `rag_api_dotnet:latest` và nạp vào Kubernetes.
+4. Deploy các manifest `tei.yaml`, `sqlserver.yaml`, `api-server-dotnet.yaml`.
+5. Khởi động lại các Pod ứng dụng (`api-server`) để nhận thay đổi.
    Sau khi chạy xong, hãy đợi khoảng 30 giây để SQL Server khởi động hoàn tất trước khi sử dụng.
 

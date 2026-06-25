@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$Vm = "luonggminh05@192.168.18.129"
+$Vm = "<username>@<vm-ip>"
 $Kubectl = "sudo /var/lib/rancher/rke2/bin/kubectl"
 $EnvFile = Join-Path $PSScriptRoot ".env.ps1"
 
@@ -42,8 +42,5 @@ Start-Sleep -Seconds 10
 
 Write-Host "5. Copying clean Vietnamese files from Windows to VM..."
 scp -r f:\BKU\Intern\Host\papers\* $Vm`:/opt/papers/
-
-Write-Host "6. Restarting file-watcher to process only the new files..."
-ssh -t $Vm "$Kubectl delete pod -l app=file-watcher --ignore-not-found=true"
 
 Write-Host "Done."

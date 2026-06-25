@@ -12,7 +12,7 @@ export interface ChatMessage {
 })
 export class ChatService {
   private hubConnection: signalR.HubConnection | undefined;
-  private readonly hubUrl = 'http://192.168.18.129:30001/chathub';
+  private readonly hubUrl = 'http://localhost:30001/chathub';
 
   public messages = signal<ChatMessage[]>([]);
   public isResponding = signal<boolean>(false);

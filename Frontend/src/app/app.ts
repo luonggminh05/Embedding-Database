@@ -48,7 +48,7 @@ export class AppComponent implements OnInit {
       this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Đang tải lên file: ${file.name}...` }]);
       this.scrollToBottom();
 
-      this.http.post('http://192.168.18.129:30001/api/document/upload', formData).subscribe({
+      this.http.post('http://localhost:30001/api/document/upload', formData).subscribe({
         next: (res: any) => {
           this.isUploading = false;
           this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Đã nạp file ${file.name} thành công. Hệ thống đang tiến hành xử lý...` }]);

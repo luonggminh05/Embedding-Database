@@ -1,6 +1,6 @@
-﻿namespace RagApi.Options;
+namespace RagApi.Options;
 
 public sealed class SqlServerOptions
 {
-    public string ConnectionString { get; set; } = "Server=localhost;Database=master;User Id=sa;Password=REPLACE_WITH_SQLSERVER_SA_PASSWORD;TrustServerCertificate=True;";
+    public string ConnectionString { get; set; } = "Server=localhost;Database=master;User Id=REPLACE_WITH_SQLSERVER_USER;Password=REPLACE_WITH_SQLSERVER_PASSWORD;TrustServerCertificate=True;";
 }
