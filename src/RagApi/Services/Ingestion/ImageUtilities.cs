@@ -20,7 +20,7 @@ internal static class ImageUtilities
         return width > 0 && height > 0;
     }
 
-    public static byte[] CompressForVision(byte[] imageBytes, int maxWidth = 1920, int maxHeight = 1080, int quality = 85)
+    public static byte[] CompressForVision(byte[] imageBytes, int maxWidth = 2560, int maxHeight = 1440, int quality = 95)
     {
         using var source = SKBitmap.Decode(imageBytes);
         if (source is null)

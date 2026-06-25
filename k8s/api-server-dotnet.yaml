@@ -25,6 +25,10 @@ spec:
               value: "http://+:8080"
             - name: Tei__Url
               value: "http://embedding-server:80"
+            - name: UpRAG__LMStudioEndpoint
+              value: "http://localhost:1224/v1"
+            - name: UpRAG__ModelId
+              value: "qwen2.5-7b-instruct"
             - name: SqlServer__ConnectionString
               valueFrom:
                 secretKeyRef:
@@ -42,6 +46,38 @@ spec:
               value: "1024"
             - name: Search__QueryEmbeddingCacheTtlSeconds
               value: "3600"
+            - name: Ingestion__Enabled
+              value: "true"
+            - name: Ingestion__PapersDirectory
+              value: "/opt/papers"
+            - name: Ingestion__EnableOcr
+              value: "true"
+            - name: Ingestion__EnableVisionCaption
+              value: "true"
+            - name: Ingestion__VisionApiUrl
+              value: "http://localhost:1224/v1/chat/completions"
+            - name: Ingestion__VisionApiKey
+              value: "lm-studio"
+            - name: Ingestion__VisionModel
+              value: "qwen2.5-vl-7b-instruct"
+            - name: Ingestion__MinVisionImageWidth
+              value: "100"
+            - name: Ingestion__MinVisionImageHeight
+              value: "100"
+            - name: Ingestion__VisionTimeoutSeconds
+              value: "60"
+            - name: Ingestion__MaxVisionImagesPerSlide
+              value: "5"
+            - name: Ingestion__MaxVisionImagesPerFile
+              value: "50"
+          volumeMounts:
+            - name: papers
+              mountPath: /opt/papers
+      volumes:
+        - name: papers
+          hostPath:
+            path: /opt/papers
+            type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Service

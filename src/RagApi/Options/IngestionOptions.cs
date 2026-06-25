@@ -11,7 +11,7 @@ public class IngestionOptions
     public bool EnableVisionCaption { get; set; } = false;
     public string? VisionApiUrl { get; set; }
     public string VisionApiKey { get; set; } = "EMPTY";
-    public string VisionModel { get; set; } = "llava";
+    public string VisionModel { get; set; } = "qwen2.5-vl-7b-instruct";
     public string TessdataPath { get; set; } = "tessdata";
     public int MinVisionImageWidth { get; set; } = 100;
     public int MinVisionImageHeight { get; set; } = 100;

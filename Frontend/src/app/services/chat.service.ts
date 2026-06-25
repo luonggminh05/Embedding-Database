@@ -18,7 +18,7 @@ export class ChatService {
   public isResponding = signal<boolean>(false);
   public currentStreamedMessage = signal<string>('');
   
-  // Lưu tạm citations của luồng hiện tại
+  // LÆ°u táº¡m citations cá»§a luá»“ng hiá»‡n táº¡i
   private currentCitations: any[] = [];
 
   constructor() {}
@@ -72,11 +72,11 @@ export class ChatService {
     
     if (this.hubConnection && this.hubConnection.state === signalR.HubConnectionState.Connected) {
       this.hubConnection.invoke('Ask', message).catch(err => {
-        console.error('Lỗi khi gửi tin nhắn qua WebSocket:', err);
+        console.error('Lá»—i khi gá»­i tin nháº¯n qua WebSocket:', err);
         this.isResponding.set(false);
       });
     } else {
-      console.error('SignalR chưa kết nối!');
+      console.error('SignalR chÆ°a káº¿t ná»‘i!');
       this.isResponding.set(false);
     }
   }

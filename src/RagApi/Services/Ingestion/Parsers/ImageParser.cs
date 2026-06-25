@@ -56,27 +56,30 @@ public class ImageParser : IDocumentParser
 
         var ocrText = await _ocrService.ExtractTextAsync(imageBytes);
         var caption = await _visionCaptionService.GenerateCaptionAsync(imageBytes, metadata, ocrText);
+        var usefulCaption = VisionCaptionQuality.IsUseful(caption, ocrText) ? caption : null;
 
-        if (string.IsNullOrWhiteSpace(caption) && string.IsNullOrWhiteSpace(ocrText))
+        if (string.IsNullOrWhiteSpace(usefulCaption) && string.IsNullOrWhiteSpace(ocrText))
         {
             return docs;
         }
 
-        var contentParts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(caption))
+        var contentParts = new List<string>
         {
-            contentParts.Add($"Image caption: {caption}");
-        }
-
-        contentParts.Add($"Image dimensions: {width}x{height}px.");
+            $"Image dimensions: {width}x{height}px."
+        };
 
         if (!string.IsNullOrWhiteSpace(ocrText))
         {
             contentParts.Add($"OCR text: {ocrText}");
         }
 
+        if (!string.IsNullOrWhiteSpace(usefulCaption))
+        {
+            contentParts.Add($"Vision caption: {usefulCaption}");
+        }
+
         metadata["has_ocr_text"] = !string.IsNullOrWhiteSpace(ocrText);
-        metadata["caption_source"] = !string.IsNullOrWhiteSpace(caption) ? "vision" : "ocr";
+        metadata["caption_source"] = !string.IsNullOrWhiteSpace(usefulCaption) ? "ocr+vision" : "ocr";
 
         docs.Add(new IngestedDocument
         {

@@ -73,7 +73,7 @@ public sealed class VisionCaptionService : IVisionCaptionService
                 }
             },
             temperature = 0,
-            max_tokens = 1000
+            max_tokens = 1800
         };
 
         try
@@ -127,18 +127,106 @@ public sealed class VisionCaptionService : IVisionCaptionService
 
     private static string BuildPrompt(string? ocrText)
     {
-        var prompt =
-            "<image>\n" +
-            "B\u1EA1n l\u00E0 m\u1ED9t tr\u1EE3 l\u00FD th\u00F4ng minh chuy\u00EAn \u0111\u1ECDc t\u00E0i li\u1EC7u h\u01B0\u1EDBng d\u1EABn s\u1EED d\u1EE5ng v\u00E0 chuy\u00EAn gia ph\u00E2n t\u00EDch \u1EA3nh giao di\u1EC7n ph\u1EA7n m\u1EC1m. " +
-            "H\u00E3y m\u00F4 t\u1EA3 th\u1EADt chi ti\u1EBFt h\u00ECnh \u1EA3nh n\u00E0y b\u1EB1ng ti\u1EBFng Vi\u1EC7t \u0111\u1EC3 l\u00E0m d\u1EEF li\u1EC7u cho h\u1EC7 th\u1ED1ng t\u00ECm ki\u1EBFm RAG. " +
-            "Y\u00EAu c\u1EA7u: " +
-            "1. Tr\u00EDch xu\u1EA5t tr\u1ECDn v\u1EB9n v\u0103n b\u1EA3n h\u01B0\u1EDBng d\u1EABn, quy tr\u00ECnh, c\u00E1c b\u01B0\u1EDBc th\u1EF1c hi\u1EC7n ho\u1EB7c ch\u00FA th\u00EDch c\u00F3 trong \u1EA3nh. " +
-            "2. Li\u1EC7t k\u00EA \u0111\u1EA7y \u0111\u1EE7 v\u00E0 chi ti\u1EBFt t\u00EAn c\u1EE7a c\u00E1c \u00F4 nh\u1EADp li\u1EC7u, nh\u00E3n, n\u00FAt b\u1EA5m, \u0111i\u1EC1u ki\u1EC7n t\u00ECm ki\u1EBFm, d\u1EEF li\u1EC7u b\u1EA3ng. " +
-            "Kh\u00F4ng t\u00F3m t\u1EAFt qua loa, ph\u1EA3i gi\u1EEF nguy\u00EAn c\u00E1c thu\u1EADt ng\u1EEF nghi\u1EC7p v\u1EE5 v\u00E0 lu\u1ED3ng thao t\u00E1c.";
+        var prompt = """
+            <image>
+            You are a precise vision extraction engine for a RAG chatbot. The image may be a business software screen, search form, data table, email, document, notification, or screenshot.
+
+            Core rules:
+            - Read all visible text exactly, especially Vietnamese UI labels and table headers.
+            - Do not give generic descriptions such as "this is a software screen".
+            - Do not invent hidden fields, values, rows, senders, recipients, or actions.
+            - Extract information as database-ready text so a chatbot can later answer questions about fields, counts, columns, buttons, required inputs, and email contents.
+            - If a value is not visible, write "unknown". If a section is not applicable, write "not applicable".
+            - If a field label has a visible "*" or another required marker, set Required: yes and mention that the field is mandatory.
+            - Keep section titles exactly as shown below in ASCII. Preserve Vietnamese text from the image exactly as visible.
+            - Keep the fixed section titles in ASCII, but write extracted descriptions, expected inputs, QUESTION_ANSWER_HINTS, and SEARCHABLE_SUMMARY in Vietnamese when the image contains Vietnamese text.
+
+            Return the answer in this exact structure:
+
+            IMAGE_TYPE:
+            One of UI_SCREEN, EMAIL, DOCUMENT, TABLE, FORM, UNKNOWN.
+
+            SYSTEM_OR_APP_NAME:
+            Visible system, app, organization, or product name.
+
+            SCREEN_OR_DOCUMENT_TITLE:
+            Current screen name, email subject, document title, or main visible title.
+
+            VISIBLE_TEXT:
+            Important visible text lines copied from the image.
+
+            UI_PANELS:
+            For each visible panel/block/card/section:
+            - Panel name: visible panel title
+              Panel purpose: what the panel is for
+              Field count: number of visible input/select/filter fields in this panel
+              Fields:
+              - Field name: visible field label
+                Control type: textbox | dropdown | date-picker | checkbox | radio | textarea | button | table-column | label | unknown
+                Expected input: what the user should type or choose in this field
+                Current value or placeholder: visible value, default option, or placeholder
+                Required: yes | no | unknown. Use yes when the label has "*" or another required marker.
+                Notes: useful visible details only
+              Buttons/actions:
+              - visible button or action name
+
+            SEARCH_CONDITIONS:
+            If the image has a search/filter panel such as "Dieu kien tim kiem", "Tim kiem", "Bo loc", or similar search/filter text, fill this section carefully.
+            - Search panel name: visible name of the search/filter panel
+            - Total search fields: exact count of visible search/filter fields
+            - Search fields:
+              - Field name: visible label
+                Control type: textbox | dropdown | date-picker | checkbox | radio | unknown
+                Expected input: what content should be entered or selected
+                Current value or placeholder: visible value/default/placeholder
+            If there is no search/filter panel, write Total search fields: 0.
+
+            DATA_TABLES:
+            For each visible data table:
+            - Table name: visible table title
+              Column count: number of visible columns
+              Columns:
+              - visible column name
+              Rows/data:
+              - visible row data, or "No data" if the table says there is no data.
+
+            EMAIL_INFO:
+            Fill only if IMAGE_TYPE is EMAIL.
+            - From: visible sender
+            - To: visible recipients
+            - Cc: visible cc recipients
+            - Subject: visible subject
+            - Date/time: visible date or time
+            - Main content: concise but complete email body extraction
+            - Requested actions: tasks, requests, deadlines, approvals, replies, or follow-ups mentioned
+            - Attachments: visible attachment names
+
+            BUTTONS_OR_ACTIONS:
+            - visible button/action/menu item names, including toolbar buttons and export/import actions.
+
+            COUNTS:
+            - Number of visible panels: count
+            - Number of search condition fields: count
+            - Number of form fields: count
+            - Number of data tables: count
+            - Number of visible table columns: count
+            - Number of buttons/actions: count
+
+            QUESTION_ANSWER_HINTS:
+            Write direct Vietnamese answer sentences with diacritics when possible. These sentences will be stored for RAG retrieval:
+            - Bang dieu kien tim kiem co <n> o/truong gom: <field names>.
+            - Cac noi dung can nhap/chon trong dieu kien tim kiem la: <expected inputs for each field>.
+            - Bang du lieu co cac cot: <column names>.
+            - Cac nut thao tac tren man hinh gom: <button/action names>.
+            - Neu la email: Email nay noi ve <topic>; yeu cau/hanh dong can lam la <actions>.
+
+            SEARCHABLE_SUMMARY:
+            Write 3-6 natural Vietnamese sentences for semantic search. Include the screen/email/document title, purpose, search fields, expected inputs, table columns, buttons/actions, and key email requests when applicable.
+            """;
 
         if (!string.IsNullOrWhiteSpace(ocrText))
         {
-            prompt += $"\nOCR text already detected: {ocrText[..Math.Min(ocrText.Length, 1000)]}";
+            prompt += $"\nExisting OCR text, use it to correct and enrich the extraction: {ocrText[..Math.Min(ocrText.Length, 2000)]}";
         }
 
         return prompt;

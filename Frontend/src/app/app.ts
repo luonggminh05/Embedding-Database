@@ -18,9 +18,9 @@ export class AppComponent implements OnInit {
   @ViewChild('chatContainer') private chatContainer!: ElementRef;
 
   constructor(public chatService: ChatService, private http: HttpClient) {
-    // Sử dụng effect để tự động scroll khi messages hoặc streamed message thay đổi
+    // Sá»­ dá»¥ng effect Ä‘á»ƒ tá»± Ä‘á»™ng scroll khi messages hoáº·c streamed message thay Ä‘á»•i
     effect(() => {
-      // Đọc các giá trị signal để effect theo dõi
+      // Äá»c cÃ¡c giÃ¡ trá»‹ signal Ä‘á»ƒ effect theo dÃµi
       this.chatService.messages();
       this.chatService.currentStreamedMessage();
       this.scrollToBottom();
@@ -45,18 +45,18 @@ export class AppComponent implements OnInit {
       const formData = new FormData();
       formData.append('file', file);
 
-      this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Đang tải lên file: ${file.name}...` }]);
+      this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Äang táº£i lÃªn file: ${file.name}...` }]);
       this.scrollToBottom();
 
       this.http.post('http://localhost:30001/api/document/upload', formData).subscribe({
         next: (res: any) => {
           this.isUploading = false;
-          this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Đã nạp file ${file.name} thành công. Hệ thống đang tiến hành xử lý...` }]);
+          this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `ÄÃ£ náº¡p file ${file.name} thÃ nh cÃ´ng. Há»‡ thá»‘ng Ä‘ang tiáº¿n hÃ nh xá»­ lÃ½...` }]);
           this.scrollToBottom();
         },
         error: (err) => {
           this.isUploading = false;
-          this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Lỗi tải file: ${err.message}` }]);
+          this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Lá»—i táº£i file: ${err.message}` }]);
           this.scrollToBottom();
         }
       });

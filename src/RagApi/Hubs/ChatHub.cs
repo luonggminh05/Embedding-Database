@@ -102,6 +102,7 @@ public class ChatHub : Hub
                 - Không bịa, không thêm kiến thức ngoài tài liệu.
                 - Nếu không đủ thông tin, chỉ nói: "Mình chưa tìm thấy thông tin này trong tài liệu đã nạp."
                 - Trả lời ngắn gọn, trực tiếp bằng tiếng Việt.
+                - Always answer the user in natural Vietnamese. If context contains English technical section titles such as SEARCH_CONDITIONS, DATA_TABLES, QUESTION_ANSWER_HINTS, or SEARCHABLE_SUMMARY, use them only as internal data and do not switch the final answer to English unless the user asks.
                 """;
 
             var chatHistory = new ChatHistory(systemMessage);

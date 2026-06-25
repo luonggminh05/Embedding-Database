@@ -31,8 +31,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddSignalR();
 
-var lmStudioUrl = builder.Configuration["UpRAG:LMStudioEndpoint"] ?? "http://127.0.0.1:1234/v1";
-var modelId = builder.Configuration["UpRAG:ModelId"] ?? "meta-llama-3.1-8b-instruct";
+var lmStudioUrl = builder.Configuration["UpRAG:LMStudioEndpoint"] ?? "http://localhost:1224/v1";
+var modelId = builder.Configuration["UpRAG:ModelId"] ?? "qwen2.5-7b-instruct";
 var apiKey = builder.Configuration["UpRAG:ApiKey"] ?? "EMPTY";
 
 var kernelBuilder = Kernel.CreateBuilder();

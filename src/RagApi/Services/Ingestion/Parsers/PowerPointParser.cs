@@ -208,15 +208,29 @@ public class PowerPointParser : IDocumentParser
             caption = await _visionCaptionService.GenerateCaptionAsync(imageBytes, metadata, ocrText);
         }
 
-        var description = !string.IsNullOrWhiteSpace(caption)
-            ? caption
-            : !string.IsNullOrWhiteSpace(ocrText)
-                ? $"OCR text: {ocrText}"
-                : null;
-
-        if (!string.IsNullOrWhiteSpace(description))
+        var usefulCaption = VisionCaptionQuality.IsUseful(caption, ocrText) ? caption : null;
+        var imageParts = new List<string>
         {
-            texts.Add($"[H\u00ECnh \u1EA3nh/N\u00FAt tr\u00EAn slide: {description}]");
+            $"dimensions: {width}x{height}px"
+        };
+
+        if (!string.IsNullOrWhiteSpace(ocrText))
+        {
+            imageParts.Add($"OCR text: {ocrText}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(usefulCaption))
+        {
+            imageParts.Add($"Vision caption: {usefulCaption}");
+        }
+        else if (visionAttempted && string.IsNullOrWhiteSpace(ocrText))
+        {
+            imageParts.Add("Vision caption was empty or filtered as unreliable");
+        }
+
+        if (imageParts.Count > 1 || visionAttempted)
+        {
+            texts.Add($"[H\u00ECnh \u1EA3nh/N\u00FAt tr\u00EAn slide: {string.Join("; ", imageParts)}]");
         }
 
         return visionAttempted ? 1 : 0;

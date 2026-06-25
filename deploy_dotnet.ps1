@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$Vm = "<username>@<vm-ip>"
-$RemoteApp = "/home/<username>/app_code"
+$Vm = "user@<vm-ip>"
+$RemoteApp = "/home/user/app_code"
 $Kubectl = "sudo /var/lib/rancher/rke2/bin/kubectl"
 $Ctr = "sudo /var/lib/rancher/rke2/bin/ctr -a /run/k3s/containerd/containerd.sock -n k8s.io"
 $EnvFile = Join-Path $PSScriptRoot ".env.ps1"
