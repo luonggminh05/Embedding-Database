@@ -40,6 +40,11 @@ spec:
                   key: sa-password
             - name: MSSQL_PID
               value: "Developer"
+            - name: MSSQL_MEMORY_LIMIT_MB
+              value: "4096"
+          resources:
+            limits:
+              memory: "6Gi"
           volumeMounts:
             - name: sql-data
               mountPath: /var/opt/mssql

@@ -36,6 +36,7 @@ internal static class VisionCaptionQuality
         "<chi ghi "
     ];
 
+
     public static bool IsUseful(string? caption, string? ocrText)
     {
         if (string.IsNullOrWhiteSpace(caption))
@@ -59,7 +60,7 @@ internal static class VisionCaptionQuality
             return false;
         }
 
-        if (HasRepeatedLines(caption))
+        if (HasRepeatedLines(caption) || HasDegenerateRepetition(caption) || HasNumericRunaway(caption))
         {
             return false;
         }
@@ -74,14 +75,48 @@ internal static class VisionCaptionQuality
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(ocrText))
+        if (!hasStructuredEvidence)
+        {
+            return false;
+        }
+
+        return CountLetters(caption) >= 20;
+    }
+
+
+    private static bool HasDegenerateRepetition(string text)
+    {
+        var normalized = Normalize(text);
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 20)
+        {
+            return false;
+        }
+
+        var mostCommonTokenCount = tokens
+            .GroupBy(token => token)
+            .Max(group => group.Count());
+
+        return mostCommonTokenCount >= 12 || mostCommonTokenCount >= tokens.Length * 0.45;
+    }
+
+    private static bool HasNumericRunaway(string text)
+    {
+        var compact = Regex.Replace(text, @"\s+", string.Empty);
+        if (compact.Length < 120)
+        {
+            return false;
+        }
+
+        var digitCount = compact.Count(char.IsDigit);
+        var letterCount = compact.Count(char.IsLetter);
+        if (digitCount > letterCount * 3 && Regex.IsMatch(compact, @"(?:\d[\d.,]*){80,}"))
         {
             return true;
         }
 
-        return hasStructuredEvidence || CountLetters(caption) >= 20;
+        return Regex.IsMatch(compact, @"(?:0{8,}|0001|0002|\.000){8,}");
     }
-
     private static bool HasRepeatedLines(string text)
     {
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

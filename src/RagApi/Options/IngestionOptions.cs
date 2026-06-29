@@ -7,7 +7,7 @@ public class IngestionOptions
     public int ChunkSize { get; set; } = 600;
     public int ChunkOverlap { get; set; } = 100;
     public int BatchSize { get; set; } = 10;
-    public bool EnableOcr { get; set; } = false;
+    public bool EnableOcr { get; set; } = true;
     public bool EnableVisionCaption { get; set; } = false;
     public string? VisionApiUrl { get; set; }
     public string VisionApiKey { get; set; } = "EMPTY";
@@ -16,8 +16,8 @@ public class IngestionOptions
     public int MinVisionImageWidth { get; set; } = 100;
     public int MinVisionImageHeight { get; set; } = 100;
     public int VisionTimeoutSeconds { get; set; } = 60;
-    public int MaxVisionImagesPerSlide { get; set; } = 5;
-    public int MaxVisionImagesPerFile { get; set; } = 50;
+    public int MaxVisionImagesPerSlide { get; set; } = 0;
+    public int MaxVisionImagesPerFile { get; set; } = 0;
 
     public void Validate()
     {
@@ -27,7 +27,7 @@ public class IngestionOptions
         if (MinVisionImageWidth <= 0) throw new ArgumentOutOfRangeException(nameof(MinVisionImageWidth), "MinVisionImageWidth must be > 0");
         if (MinVisionImageHeight <= 0) throw new ArgumentOutOfRangeException(nameof(MinVisionImageHeight), "MinVisionImageHeight must be > 0");
         if (VisionTimeoutSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(VisionTimeoutSeconds), "VisionTimeoutSeconds must be > 0");
-        if (MaxVisionImagesPerSlide <= 0) throw new ArgumentOutOfRangeException(nameof(MaxVisionImagesPerSlide), "MaxVisionImagesPerSlide must be > 0");
-        if (MaxVisionImagesPerFile <= 0) throw new ArgumentOutOfRangeException(nameof(MaxVisionImagesPerFile), "MaxVisionImagesPerFile must be > 0");
+        if (MaxVisionImagesPerSlide < 0) throw new ArgumentOutOfRangeException(nameof(MaxVisionImagesPerSlide), "MaxVisionImagesPerSlide must be >= 0; use 0 for unlimited");
+        if (MaxVisionImagesPerFile < 0) throw new ArgumentOutOfRangeException(nameof(MaxVisionImagesPerFile), "MaxVisionImagesPerFile must be >= 0; use 0 for unlimited");
     }
 }

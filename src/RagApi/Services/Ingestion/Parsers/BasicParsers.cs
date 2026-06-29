@@ -8,6 +8,17 @@ public interface IDocumentParser
 {
     bool CanParse(string extension);
     Task<List<IngestedDocument>> ParseAsync(string filePath, string fileName);
+
+    /// <summary>
+    /// </summary>
+    async IAsyncEnumerable<IngestedDocument> ParseStreamAsync(string filePath, string fileName)
+    {
+        var docs = await ParseAsync(filePath, fileName);
+        foreach (var doc in docs)
+        {
+            yield return doc;
+        }
+    }
 }
 
 public class PdfParser : IDocumentParser

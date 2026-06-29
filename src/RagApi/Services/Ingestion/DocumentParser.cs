@@ -15,24 +15,52 @@ public class DocumentParser
 
     public async Task<List<IngestedDocument>> ParseAsync(string filePath)
     {
+        var docs = new List<IngestedDocument>();
+        await foreach (var doc in ParseStreamAsync(filePath))
+        {
+            docs.Add(doc);
+        }
+        return docs;
+    }
+
+    public async IAsyncEnumerable<IngestedDocument> ParseStreamAsync(string filePath)
+    {
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         var fileName = Path.GetFileName(filePath);
         
         var parser = _parsers.FirstOrDefault(p => p.CanParse(extension));
-        if (parser != null)
+        if (parser == null)
         {
+            _logger.LogWarning("No parser found for extension {Extension}", extension);
+            yield break;
+        }
+
+        IAsyncEnumerable<IngestedDocument> stream;
+        try
+        {
+            stream = parser.ParseStreamAsync(filePath, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start parsing document {FileName}", fileName);
+            throw;
+        }
+
+        await using var enumerator = stream.GetAsyncEnumerator();
+        while (true)
+        {
+            IngestedDocument current;
             try
             {
-                return await parser.ParseAsync(filePath, fileName);
+                if (!await enumerator.MoveNextAsync()) yield break;
+                current = enumerator.Current;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to parse document {FileName}", fileName);
-                return new List<IngestedDocument>();
+                _logger.LogError(ex, "Failed while parsing document {FileName}", fileName);
+                throw;
             }
+            yield return current;
         }
-
-        _logger.LogWarning("No parser found for extension {Extension}", extension);
-        return new List<IngestedDocument>();
     }
 }

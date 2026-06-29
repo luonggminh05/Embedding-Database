@@ -37,77 +37,103 @@ public class DocumentIngestionService
         if (!Path.IsPathRooted(papersDir)) papersDir = Path.Combine(Directory.GetCurrentDirectory(), papersDir);
         var relativePath = Path.GetRelativePath(papersDir, filePath);
         
-        var docs = await _parser.ParseAsync(filePath);
-        if (docs.Count == 0)
-        {
-            _logger.LogWarning("No content extracted from {FilePath}", filePath);
-            return true; // Consider true as it doesn't need to be retried
-        }
-
         var isTabular = filePath.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) || 
                         filePath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
 
-        List<IngestedDocument> chunks;
-        if (isTabular)
-        {
-            chunks = docs; // Tabular files are already chunked by row
-        }
-        else
-        {
-            chunks = TextSplitter.SplitDocuments(docs, _options.ChunkSize, _options.ChunkOverlap);
-        }
+        int globalChunkIndex = 0;
+        int docCount = 0;
 
-        if (chunks.Count == 0)
-        {
-            _logger.LogWarning("No chunks created from {FilePath}", filePath);
-            return true; // Nothing to ingest, don't retry
-        }
+        // Drop DiskANN vector index once before all DML operations.
+        // SQL Server blocks INSERT/UPDATE/DELETE while this index exists.
+        await _repository.DropVectorIndexAsync(cancellationToken);
 
-        _logger.LogInformation("Created {ChunkCount} chunks from {FilePath}", chunks.Count, filePath);
-
-        var batchSize = _options.BatchSize;
-        for (int i = 0; i < chunks.Count; i += batchSize)
+        try
         {
-            var batch = chunks.Skip(i).Take(batchSize).ToList();
-            var texts = batch.Select(c => c.PageContent).ToList();
-            
-            try
+            await foreach (var doc in _parser.ParseStreamAsync(filePath).WithCancellation(cancellationToken))
             {
-                var embeddings = await _embeddingService.EmbedTextsAsync(texts, cancellationToken);
-                
-                var ids = new List<string>();
-                var metadatas = new List<JsonElement>();
+                docCount++;
 
-                for (int j = 0; j < batch.Count; j++)
+                List<IngestedDocument> chunks;
+                if (isTabular)
                 {
-                    var chunk = batch[j];
-                    var globalIndex = i + j;
-                    var id = TextSplitter.GenerateChunkId(relativePath, fileInfo.LastWriteTimeUtc, fileInfo.Length, globalIndex);
-                    
-                    chunk.Metadata["relative_path"] = relativePath;
-                    chunk.Metadata["chunk_index"] = globalIndex;
-
-                    ids.Add(id);
-                    metadatas.Add(JsonSerializer.SerializeToElement(chunk.Metadata));
+                    chunks = new List<IngestedDocument> { doc };
+                }
+                else
+                {
+                    chunks = TextSplitter.SplitDocuments(new List<IngestedDocument> { doc }, _options.ChunkSize, _options.ChunkOverlap);
                 }
 
-                var request = new AddDocumentsRequest
+                if (chunks.Count == 0) continue;
+
+                // Process chunks in batches
+                var batchSize = _options.BatchSize;
+                for (int i = 0; i < chunks.Count; i += batchSize)
                 {
-                    Documents = texts,
-                    Ids = ids,
-                    Metadatas = metadatas
-                };
+                    var batch = chunks.Skip(i).Take(batchSize).ToList();
+                    var texts = batch.Select(c => c.PageContent).ToList();
+                    
+                    try
+                    {
+                        var embeddings = await _embeddingService.EmbedTextsAsync(texts, cancellationToken);
+                        
+                        var ids = new List<string>();
+                        var metadatas = new List<JsonElement>();
 
-                await _repository.UpsertDocumentsAsync(request, embeddings, cancellationToken);
-                _logger.LogInformation("Successfully ingested batch {BatchNumber} ({Count} chunks) for {FilePath}", (i / batchSize) + 1, batch.Count, filePath);
+                        for (int j = 0; j < batch.Count; j++)
+                        {
+                            var chunk = batch[j];
+                            var id = TextSplitter.GenerateChunkId(relativePath, fileInfo.LastWriteTimeUtc, fileInfo.Length, globalChunkIndex);
+                            
+                            chunk.Metadata["relative_path"] = relativePath;
+                            chunk.Metadata["chunk_index"] = globalChunkIndex;
+
+                            ids.Add(id);
+                            metadatas.Add(JsonSerializer.SerializeToElement(chunk.Metadata));
+                            globalChunkIndex++;
+                        }
+
+                        var request = new AddDocumentsRequest
+                        {
+                            Documents = texts,
+                            Ids = ids,
+                            Metadatas = metadatas
+                        };
+
+                        await _repository.UpsertDocumentsAsync(request, embeddings, cancellationToken);
+                        _logger.LogInformation("Saved {Count} chunks to DB for {FilePath} (total chunks so far: {Total})", batch.Count, filePath, globalChunkIndex);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error ingesting chunks for {FilePath}", filePath);
+                        return false;
+                    }
+                }
             }
-            catch (Exception ex)
+
+            if (docCount == 0)
             {
-                _logger.LogError(ex, "Error ingesting batch {BatchNumber} for {FilePath}", (i / batchSize) + 1, filePath);
-                return false; // Fail early and return false to trigger retry later
+                _logger.LogWarning("No content extracted from {FilePath}", filePath);
             }
-        }
+            else
+            {
+                _logger.LogInformation("Completed ingestion for {FilePath}: {TotalChunks} total chunks", filePath, globalChunkIndex);
+            }
 
-        return true;
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing file {FilePath}", filePath);
+            return false;
+        }
+        finally
+        {
+            // Always attempt to recreate the vector index even if ingestion is canceled or fails.
+            await _repository.RecreateVectorIndexAsync(CancellationToken.None);
+        }
     }
 }

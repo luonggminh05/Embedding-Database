@@ -12,6 +12,8 @@ public interface ISqlDocumentRepository
 {
     Task InitializeAsync(CancellationToken cancellationToken);
     Task UpsertDocumentsAsync(AddDocumentsRequest request, IReadOnlyList<IReadOnlyList<float>> embeddings, CancellationToken cancellationToken);
+    Task DropVectorIndexAsync(CancellationToken cancellationToken);
+    Task RecreateVectorIndexAsync(CancellationToken cancellationToken);
     Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken);
 }
 
@@ -39,13 +41,15 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         {
             try
             {
+                await EnsureDatabaseAsync(cancellationToken);
                 await TryRunDdlAsync("ALTER DATABASE SCOPED CONFIGURATION SET PREVIEW_FEATURES = ON;", cancellationToken);
 
                 if (!await TableExistsAsync(cancellationToken))
                 {
                     await RunDdlAsync("""
                         CREATE TABLE Documents (
-                            id       VARCHAR(255) CONSTRAINT PK_Documents PRIMARY KEY,
+                            id_int   INT IDENTITY(1,1) CONSTRAINT PK_Documents PRIMARY KEY CLUSTERED,
+                            id       VARCHAR(255) NOT NULL CONSTRAINT UQ_Documents_id UNIQUE,
                             document NVARCHAR(MAX),
                             metadata NVARCHAR(MAX),
                             embedding VECTOR(1024)
@@ -104,6 +108,17 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         }
 
         _logger.LogInformation("Upserted {Count} chunks to SQL Server.", request.Documents.Count);
+    }
+
+    public async Task DropVectorIndexAsync(CancellationToken cancellationToken)
+    {
+        await TryRunDdlAsync("DROP INDEX IF EXISTS idx_documents_embedding ON Documents;", cancellationToken);
+        _logger.LogInformation("Dropped DiskANN Vector Index for DML operations.");
+    }
+
+    public async Task RecreateVectorIndexAsync(CancellationToken cancellationToken)
+    {
+        await EnsureVectorIndexAsync(cancellationToken);
     }
 
     public async Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken)
@@ -235,7 +250,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         AddParameter(command, "@queryEmbeddingJson", SqlDbType.NVarChar, -1, queryEmbeddingJson);
-        AddParameter(command, "@query", SqlDbType.NVarChar, -1, query);
+        AddParameter(command, "@query", SqlDbType.NVarChar, 4000, query.Length > 4000 ? query[..4000] : query);
         AddParameter(command, "@topK", SqlDbType.Int, 0, topK);
         AddParameter(command, "@vectorCandidateCount", SqlDbType.Int, 0, vectorCandidateCount);
         AddParameter(command, "@rrfConstant", SqlDbType.Float, 0, rrfConstant);
@@ -261,6 +276,29 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         return new SearchResponse([ids], [documents], [metadatas], [distances], [citations]);
     }
 
+    private async Task EnsureDatabaseAsync(CancellationToken cancellationToken)
+    {
+        var builder = new SqlConnectionStringBuilder(_connectionString);
+        var databaseName = builder.InitialCatalog;
+        if (string.IsNullOrWhiteSpace(databaseName) ||
+            string.Equals(databaseName, "master", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(databaseName, "tempdb", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(databaseName, "model", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(databaseName, "msdb", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        builder.InitialCatalog = "master";
+        await using var connection = new SqlConnection(builder.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        var escapedName = databaseName.Replace("'", "''");
+        var delimitedName = databaseName.Replace("]", "]]");
+        command.CommandText = $"IF DB_ID(N'{escapedName}') IS NULL CREATE DATABASE [{delimitedName}];";
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        _logger.LogInformation("Ensured SQL Server database {DatabaseName} exists.", databaseName);
+    }
     private async Task EnsureFullTextAsync(CancellationToken cancellationToken)
     {
         try
@@ -276,7 +314,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
             {
                 await RunDdlAsync("""
                     CREATE FULLTEXT INDEX ON Documents(document)
-                    KEY INDEX PK_Documents ON ftCatalog
+                    KEY INDEX UQ_Documents_id ON ftCatalog
                     WITH CHANGE_TRACKING AUTO;
                     """, cancellationToken);
                 _logger.LogInformation("Created Full-Text Index.");
@@ -377,7 +415,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
     {
         return new Citation(
             GetMetadataString(metadata, "source"),
-            GetMetadataString(metadata, "page"),
+            GetMetadataString(metadata, "page") ?? GetMetadataString(metadata, "slide"),
             id,
             score);
     }

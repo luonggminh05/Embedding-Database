@@ -73,7 +73,7 @@ public sealed class VisionCaptionService : IVisionCaptionService
                 }
             },
             temperature = 0,
-            max_tokens = 1800
+            max_tokens = 1600
         };
 
         try
@@ -132,14 +132,19 @@ public sealed class VisionCaptionService : IVisionCaptionService
             You are a precise vision extraction engine for a RAG chatbot. The image may be a business software screen, search form, data table, email, document, notification, or screenshot.
 
             Core rules:
-            - Read all visible text exactly, especially Vietnamese UI labels and table headers.
-            - Do not give generic descriptions such as "this is a software screen".
-            - Do not invent hidden fields, values, rows, senders, recipients, or actions.
-            - Extract information as database-ready text so a chatbot can later answer questions about fields, counts, columns, buttons, required inputs, and email contents.
+            - Read the image directly and describe the UI structure in detail.
+            - Use OCR text as supporting evidence to verify exact label, table, tab, menu, and button text. OCR may be incomplete or garbled.
+            - If OCR conflicts with clearly visible text in the image, use the clearly visible image text. If neither is clear, write "unknown".
+            - Do not invent hidden fields, values, rows, senders, recipients, dates, attachments, organizations, business topics, or actions.
+            - Do not output random numbers, repeated numeric sequences, filler text, examples, or unrelated world knowledge. If you cannot read the image, return UNKNOWN sections with unknown values.
+            - Never infer document metadata such as nguoi lap, ngay lap, file dinh kem, don vi, or loai nghiep vu unless that exact information is visible in the image or OCR text.
+            - Describe UI layout spatially: left sidebar, top toolbar, breadcrumb/tab row, main content, upper panel, lower panel, left column, right column. Use relative positions, not pixel coordinates.
+            - For every visible label, field, table, panel, tab, menu item, and button, include where it appears and what visible content belongs to it.
+            - Extract only visible information as database-ready text so a chatbot can later answer questions about fields, counts, columns, buttons, required inputs, menu paths, tabs, panels, label positions, and email contents.
             - If a value is not visible, write "unknown". If a section is not applicable, write "not applicable".
             - If a field label has a visible "*" or another required marker, set Required: yes and mention that the field is mandatory.
             - Keep section titles exactly as shown below in ASCII. Preserve Vietnamese text from the image exactly as visible.
-            - Keep the fixed section titles in ASCII, but write extracted descriptions, expected inputs, QUESTION_ANSWER_HINTS, and SEARCHABLE_SUMMARY in Vietnamese when the image contains Vietnamese text.
+            - Keep fixed section titles in ASCII, but write extracted descriptions, expected inputs, QUESTION_ANSWER_HINTS, and SEARCHABLE_SUMMARY in Vietnamese when the image contains Vietnamese text.
 
             Return the answer in this exact structure:
 
@@ -153,29 +158,44 @@ public sealed class VisionCaptionService : IVisionCaptionService
             Current screen name, email subject, document title, or main visible title.
 
             VISIBLE_TEXT:
-            Important visible text lines copied from the image.
+            Important visible text lines copied from the image. Prefer exact Vietnamese labels verified by OCR when available.
+
+            NAVIGATION_AND_TABS:
+            - Active sidebar menu item: visible active menu/module, or unknown.
+            - Other visible sidebar menu items: list visible names.
+            - Breadcrumb path: visible breadcrumb/tab path from left to right, or unknown.
+            - Active tab/page: visible active tab/page name, or unknown.
+            - Top toolbar actions from left to right: visible actions.
+
+            UI_LAYOUT:
+            Describe the screen layout in Vietnamese: where the sidebar, toolbar, breadcrumb/tabs, main panels, search form, and data table are positioned.
 
             UI_PANELS:
             For each visible panel/block/card/section:
             - Panel name: visible panel title
+              Location: relative position on screen, such as upper main content, lower main content, left sidebar, top toolbar
               Panel purpose: what the panel is for
               Field count: number of visible input/select/filter fields in this panel
               Fields:
               - Field name: visible field label
+                Location: relative position inside the panel, such as left column row 1, right column row 2
                 Control type: textbox | dropdown | date-picker | checkbox | radio | textarea | button | table-column | label | unknown
                 Expected input: what the user should type or choose in this field
                 Current value or placeholder: visible value, default option, or placeholder
                 Required: yes | no | unknown. Use yes when the label has "*" or another required marker.
                 Notes: useful visible details only
               Buttons/actions:
-              - visible button or action name
+              - Button/action name: visible button or action name
+                Location: relative position, such as top toolbar, upper-right of main content, inside panel footer
 
             SEARCH_CONDITIONS:
             If the image has a search/filter panel such as "Dieu kien tim kiem", "Tim kiem", "Bo loc", or similar search/filter text, fill this section carefully.
             - Search panel name: visible name of the search/filter panel
+            - Search panel location: relative position on screen
             - Total search fields: exact count of visible search/filter fields
             - Search fields:
               - Field name: visible label
+                Location: relative position inside the search panel
                 Control type: textbox | dropdown | date-picker | checkbox | radio | unknown
                 Expected input: what content should be entered or selected
                 Current value or placeholder: visible value/default/placeholder
@@ -184,9 +204,11 @@ public sealed class VisionCaptionService : IVisionCaptionService
             DATA_TABLES:
             For each visible data table:
             - Table name: visible table title
+              Location: relative position on screen
               Column count: number of visible columns
-              Columns:
-              - visible column name
+              Columns from left to right:
+              - Column name: visible column name
+                Location/order: column order from left to right
               Rows/data:
               - visible row data, or "No data" if the table says there is no data.
 
@@ -202,7 +224,8 @@ public sealed class VisionCaptionService : IVisionCaptionService
             - Attachments: visible attachment names
 
             BUTTONS_OR_ACTIONS:
-            - visible button/action/menu item names, including toolbar buttons and export/import actions.
+            - Button/action/menu item name: visible name, including toolbar buttons and export/import actions
+              Location: where it appears
 
             COUNTS:
             - Number of visible panels: count
@@ -213,20 +236,20 @@ public sealed class VisionCaptionService : IVisionCaptionService
             - Number of buttons/actions: count
 
             QUESTION_ANSWER_HINTS:
-            Write direct Vietnamese answer sentences with diacritics when possible. These sentences will be stored for RAG retrieval:
-            - Bang dieu kien tim kiem co <n> o/truong gom: <field names>.
+            Write direct Vietnamese answer sentences with diacritics when possible. These sentences will be stored for RAG retrieval. Only use facts visible in the image or supported by OCR:
+            - Man hinh/module dang mo la <active menu/page>; duong dan/tab hien thi la <breadcrumb/tab path>.
+            - Bang dieu kien tim kiem nam o <location> va co <n> o/truong gom: <field names>.
             - Cac noi dung can nhap/chon trong dieu kien tim kiem la: <expected inputs for each field>.
-            - Bang du lieu co cac cot: <column names>.
-            - Cac nut thao tac tren man hinh gom: <button/action names>.
+            - Bang du lieu <table name> nam o <location> va co cac cot tu trai sang phai: <column names>.
+            - Cac nut thao tac tren man hinh gom: <button/action names>, nam tai <locations>.
             - Neu la email: Email nay noi ve <topic>; yeu cau/hanh dong can lam la <actions>.
 
             SEARCHABLE_SUMMARY:
-            Write 3-6 natural Vietnamese sentences for semantic search. Include the screen/email/document title, purpose, search fields, expected inputs, table columns, buttons/actions, and key email requests when applicable.
+            Write 4-8 natural Vietnamese sentences for semantic search. Include only visible screen/email/document title, active sidebar menu, breadcrumb/tab path, panel names and locations, search fields with positions, expected inputs, table columns, buttons/actions with locations, and key email requests when applicable. Do not add fields or values that are not visible.
             """;
-
         if (!string.IsNullOrWhiteSpace(ocrText))
         {
-            prompt += $"\nExisting OCR text, use it to correct and enrich the extraction: {ocrText[..Math.Min(ocrText.Length, 2000)]}";
+            prompt += $"\nExisting OCR text, may be incomplete or garbled. Use it to verify exact label/table/button text. Still read the image directly for layout, positions, panels, tabs, and table structure. Do not invent facts that are not visible: {ocrText[..Math.Min(ocrText.Length, 3000)]}";
         }
 
         return prompt;

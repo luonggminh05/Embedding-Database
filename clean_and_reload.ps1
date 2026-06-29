@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$Vm = "user@<vm-ip>"
-$Kubectl = "sudo /var/lib/rancher/rke2/bin/kubectl"
+$Vm = "<VM_USERNAME>@<VM_IP>"
+$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
 $EnvFile = Join-Path $PSScriptRoot ".env.ps1"
 
 if (Test-Path -LiteralPath $EnvFile) {
@@ -29,10 +29,10 @@ if ($SqlPassword.Contains("'")) {
 }
 
 Write-Host "1. Wiping all files in /opt/papers/ on VM..."
-ssh -t $Vm "sudo rm -rf /opt/papers/*"
+ssh -t $Vm "sudo rm -rf /opt/papers/* && sudo chmod 777 /opt/papers"
 
 Write-Host "2. Dropping Documents table in SQL Server..."
-ssh -t $Vm "POD=`$($Kubectl get pod -l app=sqlserver -o jsonpath='{.items[0].metadata.name}'); if [ -n `"`$POD`" ]; then $Kubectl exec `"`$POD`" -- /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$SqlPassword' -C -Q 'DROP TABLE IF EXISTS Documents'; fi"
+ssh -t $Vm "POD=`$($Kubectl get pod -l app=sqlserver -o jsonpath='{.items[0].metadata.name}'); if [ -n `"`$POD`" ]; then $Kubectl exec `"`$POD`" -- /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '$SqlPassword' -C -d RagDb -Q 'DROP TABLE IF EXISTS Documents'; fi"
 
 Write-Host "3. Restarting api-server to recreate table..."
 ssh -t $Vm "$Kubectl delete pod -l app=api-server --ignore-not-found=true"

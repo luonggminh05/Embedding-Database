@@ -100,9 +100,13 @@ public class ChatHub : Hub
                 Luật trả lời:
                 - Chỉ dùng thông tin trong NGỮ CẢNH.
                 - Không bịa, không thêm kiến thức ngoài tài liệu.
-                - Nếu không đủ thông tin, chỉ nói: "Mình chưa tìm thấy thông tin này trong tài liệu đã nạp."
-                - Trả lời ngắn gọn, trực tiếp bằng tiếng Việt.
+                - If the context contains any relevant information, answer with the information found. If only part of the answer is missing, provide the found part and clearly say which part was not found in the documents.
+                - Trả lời ngắn gọn, đầy đủ thông tin, trực tiếp bằng tiếng Việt.
                 - Always answer the user in natural Vietnamese. If context contains English technical section titles such as SEARCH_CONDITIONS, DATA_TABLES, QUESTION_ANSWER_HINTS, or SEARCHABLE_SUMMARY, use them only as internal data and do not switch the final answer to English unless the user asks.
+                - Do not repeat the same sentence, paragraph, example, or closing phrase.
+                - Avoid generic advice or writing-template advice when the user asks about software usage; prefer concrete UI instructions from the context.
+                - If the context is about software UI instructions, answer with the concrete UI steps, menu names, fields, buttons, panels, and tabs found in the context.
+                - Keep any closing sentence to at most one short sentence, and do not repeat it.
                 """;
 
             var chatHistory = new ChatHistory(systemMessage);
@@ -121,7 +125,10 @@ public class ChatHub : Hub
             {
                 Temperature = 0,
                 TopP = 1,
-                MaxTokens = 500
+                FrequencyPenalty = 0.6,
+                PresencePenalty = 0,
+                MaxTokens = 350,
+                StopSequences = ["\nNgu?n t�i li?u:", "\nNguồn tài liệu:"]
             };
 
             var stream = _chatCompletion.GetStreamingChatMessageContentsAsync(
@@ -130,10 +137,18 @@ public class ChatHub : Hub
                 _kernel,
                 cancellationToken);
 
+            var generatedAnswer = new StringBuilder();
             await foreach (var content in stream)
             {
                 if (!string.IsNullOrEmpty(content.Content))
                 {
+                    generatedAnswer.Append(content.Content);
+                    if (IsRepetitionLoop(generatedAnswer.ToString()))
+                    {
+                        Console.WriteLine("Stopped streaming answer because repeated text was detected.");
+                        break;
+                    }
+
                     await Clients.Caller.SendAsync("ReceiveToken", content.Content, cancellationToken);
                 }
             }
@@ -148,6 +163,56 @@ public class ChatHub : Hub
         }
     }
 
+    private static bool IsRepetitionLoop(string text)
+    {
+        if (text.Length < 180)
+        {
+            return false;
+        }
+
+        return HasRepeatedRecentSentence(text) || HasRepeatedSuffix(text, 70, 3);
+    }
+
+    private static bool HasRepeatedRecentSentence(string text)
+    {
+        var sentences = Regex.Split(text.Trim(), @"(?<=[.!?])\s+")
+            .Select(sentence => NormalizeText(sentence).Trim())
+            .Where(sentence => sentence.Length >= 35)
+            .ToArray();
+
+        if (sentences.Length < 4)
+        {
+            return false;
+        }
+
+        var last = sentences[^1];
+        return sentences.Count(sentence => sentence == last) >= 3;
+    }
+
+    private static bool HasRepeatedSuffix(string text, int suffixLength, int minimumOccurrences)
+    {
+        var normalized = NormalizeText(Regex.Replace(text, @"\s+", " "));
+        if (normalized.Length < suffixLength * minimumOccurrences)
+        {
+            return false;
+        }
+
+        var suffix = normalized[^suffixLength..];
+        var count = 0;
+        var index = 0;
+        while ((index = normalized.IndexOf(suffix, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            count++;
+            if (count >= minimumOccurrences)
+            {
+                return true;
+            }
+
+            index += suffix.Length;
+        }
+
+        return false;
+    }
     private async Task SendCompleteAnswerAsync(string answer, IReadOnlyList<object> citations, CancellationToken cancellationToken)
     {
         await Clients.Caller.SendAsync("ReceiveCitations", citations, cancellationToken);
@@ -225,12 +290,23 @@ public class ChatHub : Hub
     private static string BuildContextText(IReadOnlyList<string> documents, IReadOnlyList<JsonElement> metadatas)
     {
         var chunks = new List<string>();
+        var seenDocuments = new HashSet<string>(StringComparer.Ordinal);
+        var chunkNumber = 0;
+
         for (var i = 0; i < documents.Count; i++)
         {
+            var document = documents[i];
+            var documentKey = NormalizeText(document);
+            if (!seenDocuments.Add(documentKey))
+            {
+                continue;
+            }
+
             var metadata = i < metadatas.Count ? metadatas[i] : default;
+            chunkNumber++;
             chunks.Add($"""
-                [ĐOẠN {i + 1} - {BuildSourceLabel(metadata)}]
-                {documents[i]}
+                [DOAN {chunkNumber} - {BuildSourceLabel(metadata)}]
+                {document}
                 """);
         }
 
@@ -523,7 +599,7 @@ public class ChatHub : Hub
             var category = CharUnicodeInfo.GetUnicodeCategory(character);
             if (category != UnicodeCategory.NonSpacingMark)
             {
-                builder.Append(character == 'đ' ? 'd' : character);
+                builder.Append(character == '\u0111' ? 'd' : character);
             }
         }
 

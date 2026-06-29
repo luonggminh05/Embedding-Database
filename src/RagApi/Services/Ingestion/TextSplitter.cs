@@ -53,8 +53,13 @@ public static class TextSplitter
                     });
                 }
 
-                currentIdx += length - chunkOverlap;
-                if (currentIdx >= text.Length) break;
+                if (currentIdx + length >= text.Length) break;
+                
+                // Ensure we always advance forward
+                int advance = length - chunkOverlap;
+                if (advance <= 0) advance = 1;
+                
+                currentIdx += advance;
             }
         }
 
