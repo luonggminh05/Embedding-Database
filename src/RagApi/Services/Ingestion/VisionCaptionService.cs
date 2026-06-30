@@ -11,14 +11,33 @@ public sealed class VisionCaptionService : IVisionCaptionService
     private readonly HttpClient _httpClient;
     private readonly IngestionOptions _options;
     private readonly ILogger<VisionCaptionService> _logger;
+    private static readonly object LimiterLock = new();
+    private static SemaphoreSlim? SharedLimiter;
+    private static int SharedLimiterSize;
+
+    private readonly SemaphoreSlim _concurrencyLimiter;
 
     public VisionCaptionService(HttpClient httpClient, IOptions<IngestionOptions> options, ILogger<VisionCaptionService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _concurrencyLimiter = GetSharedLimiter(_options.MaxConcurrentVisionCalls);
     }
 
+    private static SemaphoreSlim GetSharedLimiter(int maxConcurrentCalls)
+    {
+        lock (LimiterLock)
+        {
+            if (SharedLimiter == null || SharedLimiterSize != maxConcurrentCalls)
+            {
+                SharedLimiter = new SemaphoreSlim(maxConcurrentCalls, maxConcurrentCalls);
+                SharedLimiterSize = maxConcurrentCalls;
+            }
+
+            return SharedLimiter;
+        }
+    }
     public async Task<string?> GenerateCaptionAsync(
         byte[] imageBytes,
         Dictionary<string, object> metadata,
@@ -76,53 +95,64 @@ public sealed class VisionCaptionService : IVisionCaptionService
             max_tokens = 1600
         };
 
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(_options.VisionTimeoutSeconds));
+
         try
         {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(_options.VisionTimeoutSeconds));
+            await _concurrencyLimiter.WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Vision API call timed out while waiting for concurrency slot.");
+            return null;
+        }
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, _options.VisionApiUrl)
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, _options.VisionApiUrl)
             {
-                Content = JsonContent.Create(payload)
+                Content = JsonContent.Create(payload, options: new JsonSerializerOptions
+                {
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                })
             };
 
-            if (!string.IsNullOrWhiteSpace(_options.VisionApiKey))
+            if (_options.VisionApiKey != "EMPTY")
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.VisionApiKey);
             }
 
-            using var response = await _httpClient.SendAsync(request, timeoutCts.Token);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Vision failed for {Source}: HTTP {StatusCode}.", GetMetadata(metadata, "source"), response.StatusCode);
-                return null;
-            }
+            var response = await _httpClient.SendAsync(request, cts.Token);
+            response.EnsureSuccessStatusCode();
 
-            await using var stream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
-            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: timeoutCts.Token);
-            var caption = json.RootElement
+            var responseJson = await response.Content.ReadAsStringAsync(cts.Token);
+            using var doc = JsonDocument.Parse(responseJson);
+            
+            var caption = doc.RootElement
                 .GetProperty("choices")[0]
                 .GetProperty("message")
                 .GetProperty("content")
-                .GetString()
-                ?.Trim();
+                .GetString();
 
-            if (!string.IsNullOrWhiteSpace(caption))
-            {
-                _logger.LogInformation("Vision caption generated for {Source} ({Width}x{Height}px).", GetMetadata(metadata, "source"), width, height);
-                return caption;
-            }
+            if (string.IsNullOrWhiteSpace(caption)) return null;
+
+            return caption.Trim();
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
-            _logger.LogWarning("Vision timed out for {Source} after {TimeoutSeconds}s.", GetMetadata(metadata, "source"), _options.VisionTimeoutSeconds);
+            _logger.LogWarning("Vision API call timed out for image from {Source}", GetMetadata(metadata, "source"));
+            return null;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Vision failed for {Source}.", GetMetadata(metadata, "source"));
+            _logger.LogError(ex, "Vision API error for image from {Source}", GetMetadata(metadata, "source"));
+            return null;
         }
-
-        return null;
+        finally
+        {
+            _concurrencyLimiter.Release();
+        }
     }
 
     private static string BuildPrompt(string? ocrText)
@@ -258,3 +288,5 @@ public sealed class VisionCaptionService : IVisionCaptionService
     private static object? GetMetadata(Dictionary<string, object> metadata, string key) =>
         metadata.TryGetValue(key, out var value) ? value : null;
 }
+
+

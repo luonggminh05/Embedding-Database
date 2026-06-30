@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ChatService, ChatMessage } from './services/chat.service';
+import { API_BASE_URL } from './app.constants';
 
 @Component({
   selector: 'app-root',
@@ -48,7 +49,7 @@ export class AppComponent implements OnInit {
       this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `Äang táº£i lÃªn file: ${file.name}...` }]);
       this.scrollToBottom();
 
-      this.http.post('http://<VM_IP>:30001/api/document/upload', formData).subscribe({
+      this.http.post(`${API_BASE_URL}/api/document/upload`, formData).subscribe({
         next: (res: any) => {
           this.isUploading = false;
           this.chatService.messages.update(msgs => [...msgs, { role: 'bot', content: `ÄÃ£ náº¡p file ${file.name} thÃ nh cÃ´ng. Há»‡ thá»‘ng Ä‘ang tiáº¿n hÃ nh xá»­ lÃ½...` }]);

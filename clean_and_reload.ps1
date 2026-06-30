@@ -1,13 +1,28 @@
 $ErrorActionPreference = "Stop"
 
-$Vm = "<VM_USERNAME>@<VM_IP>"
-$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
 $EnvFile = Join-Path $PSScriptRoot ".env.ps1"
 
 if (Test-Path -LiteralPath $EnvFile) {
     . $EnvFile
 }
 
+function Get-RequiredSetting {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value,
+        [Parameter(Mandatory = $true)]
+        [string]$Prompt
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        return $Value
+    }
+
+    return Read-Host $Prompt
+}
+
+$Vm = Get-RequiredSetting $env:DEPLOY_VM "Enter SSH target (user@host)"
+$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
 function Get-SqlPassword {
     if (-not [string]::IsNullOrWhiteSpace($env:SQLSERVER_SA_PASSWORD)) {
         return $env:SQLSERVER_SA_PASSWORD

@@ -14,7 +14,12 @@ public interface ISqlDocumentRepository
     Task UpsertDocumentsAsync(AddDocumentsRequest request, IReadOnlyList<IReadOnlyList<float>> embeddings, CancellationToken cancellationToken);
     Task DropVectorIndexAsync(CancellationToken cancellationToken);
     Task RecreateVectorIndexAsync(CancellationToken cancellationToken);
-    Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken);
+    Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken, string? contentKind = null);
+    Task<IReadOnlyList<(string Document, JsonElement Metadata)>> GetRelatedChunksAsync(
+        IReadOnlyList<JsonElement> sourceMetadatas,
+        string contentKind,
+        int limit,
+        CancellationToken cancellationToken);
 }
 
 public sealed class SqlDocumentRepository : ISqlDocumentRepository
@@ -121,7 +126,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         await EnsureVectorIndexAsync(cancellationToken);
     }
 
-    public async Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken)
+    public async Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken, string? contentKind = null)
     {
         var topK = Math.Clamp(requestedTopK, 1, Math.Max(1, _searchOptions.TopKMax));
         var vectorCandidateCount = Math.Max(topK, _searchOptions.VectorCandidateCount);
@@ -135,13 +140,18 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
 
         var sql = fullTextReady
             ? """
-                WITH VectorBase AS (
+                WITH FilteredDocuments AS (
+                    SELECT id, document, metadata, embedding
+                    FROM Documents
+                    WHERE @contentKind IS NULL OR JSON_VALUE(metadata, '$.content_kind') = @contentKind
+                ),
+                VectorBase AS (
                     SELECT
                         id,
                         document,
                         metadata,
                         VECTOR_DISTANCE('cosine', embedding, CAST(CAST(@queryEmbeddingJson AS VARCHAR(MAX)) AS VECTOR(1024))) AS distance
-                    FROM Documents
+                    FROM FilteredDocuments
                 ),
                 VectorSearch AS (
                     SELECT TOP (@vectorCandidateCount)
@@ -155,13 +165,14 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                 ),
                 KeywordSearch AS (
                     SELECT TOP (@vectorCandidateCount)
-                           [KEY] AS id,
-                           ROW_NUMBER() OVER (ORDER BY [RANK] DESC) AS keyword_rank
-                    FROM FREETEXTTABLE(Documents, document, @query)
+                           ft.[KEY] AS id,
+                           ROW_NUMBER() OVER (ORDER BY ft.[RANK] DESC) AS keyword_rank
+                    FROM FREETEXTTABLE(Documents, document, @query) AS ft
+                    INNER JOIN FilteredDocuments d ON d.id = ft.[KEY]
                 ),
                 ExactMatchSearch AS (
                     SELECT id, 10000 AS exact_score
-                    FROM Documents
+                    FROM FilteredDocuments
                     WHERE @exactKeyword <> '' AND document LIKE '%' + @exactKeyword + '%'
                 ),
                 CandidateIds AS (
@@ -177,7 +188,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                            k.keyword_rank,
                            e.exact_score
                     FROM CandidateIds c
-                    INNER JOIN Documents d ON d.id = c.id
+                    INNER JOIN FilteredDocuments d ON d.id = c.id
                     LEFT JOIN VectorSearch v ON v.id = c.id
                     LEFT JOIN KeywordSearch k ON k.id = c.id
                     LEFT JOIN ExactMatchSearch e ON e.id = c.id
@@ -189,13 +200,18 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                 ORDER BY RRF_Score DESC;
                 """
             : """
-                WITH VectorBase AS (
+                WITH FilteredDocuments AS (
+                    SELECT id, document, metadata, embedding
+                    FROM Documents
+                    WHERE @contentKind IS NULL OR JSON_VALUE(metadata, '$.content_kind') = @contentKind
+                ),
+                VectorBase AS (
                     SELECT
                         id,
                         document,
                         metadata,
                         VECTOR_DISTANCE('cosine', embedding, CAST(CAST(@queryEmbeddingJson AS VARCHAR(MAX)) AS VECTOR(1024))) AS distance
-                    FROM Documents
+                    FROM FilteredDocuments
                 ),
                 VectorSearch AS (
                     SELECT TOP (@vectorCandidateCount)
@@ -209,7 +225,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                 ),
                 ExactMatchSearch AS (
                     SELECT id, 10000 AS exact_score
-                    FROM Documents
+                    FROM FilteredDocuments
                     WHERE @exactKeyword <> '' AND document LIKE '%' + @exactKeyword + '%'
                 ),
                 CandidateIds AS (
@@ -222,7 +238,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
                            v.vector_rank,
                            e.exact_score
                     FROM CandidateIds c
-                    INNER JOIN Documents d ON d.id = c.id
+                    INNER JOIN FilteredDocuments d ON d.id = c.id
                     LEFT JOIN VectorSearch v ON v.id = c.id
                     LEFT JOIN ExactMatchSearch e ON e.id = c.id
                 )
@@ -255,6 +271,7 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         AddParameter(command, "@vectorCandidateCount", SqlDbType.Int, 0, vectorCandidateCount);
         AddParameter(command, "@rrfConstant", SqlDbType.Float, 0, rrfConstant);
         AddParameter(command, "@exactKeyword", SqlDbType.NVarChar, -1, exactKeyword);
+        AddParameter(command, "@contentKind", SqlDbType.NVarChar, 64, (object?)contentKind ?? DBNull.Value);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -276,6 +293,95 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         return new SearchResponse([ids], [documents], [metadatas], [distances], [citations]);
     }
 
+
+    public async Task<IReadOnlyList<(string Document, JsonElement Metadata)>> GetRelatedChunksAsync(
+        IReadOnlyList<JsonElement> sourceMetadatas,
+        string contentKind,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        if (sourceMetadatas.Count == 0 || limit <= 0)
+        {
+            return [];
+        }
+
+        var anchors = sourceMetadatas
+            .Select(ExtractLocationAnchor)
+            .Where(anchor => !string.IsNullOrWhiteSpace(anchor.Source))
+            .Distinct()
+            .Take(20)
+            .ToList();
+
+        if (anchors.Count == 0)
+        {
+            return [];
+        }
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+
+        var predicates = new List<string>();
+        AddParameter(command, "@contentKind", SqlDbType.NVarChar, 64, contentKind);
+        AddParameter(command, "@limit", SqlDbType.Int, 0, limit);
+
+        for (var i = 0; i < anchors.Count; i++)
+        {
+            var anchor = anchors[i];
+            var sourceParam = $"@source{i}";
+            AddParameter(command, sourceParam, SqlDbType.NVarChar, 512, anchor.Source!);
+
+            var locationParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(anchor.Page))
+            {
+                var pageParam = $"@page{i}";
+                AddParameter(command, pageParam, SqlDbType.NVarChar, 64, anchor.Page!);
+                locationParts.Add($"JSON_VALUE(metadata, '$.page') = {pageParam}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(anchor.Slide))
+            {
+                var slideParam = $"@slide{i}";
+                AddParameter(command, slideParam, SqlDbType.NVarChar, 64, anchor.Slide!);
+                locationParts.Add($"JSON_VALUE(metadata, '$.slide') = {slideParam}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(anchor.ParagraphIndex))
+            {
+                var paragraphParam = $"@paragraph{i}";
+                AddParameter(command, paragraphParam, SqlDbType.NVarChar, 64, anchor.ParagraphIndex!);
+                locationParts.Add($"JSON_VALUE(metadata, '$.paragraph_index') = {paragraphParam}");
+            }
+
+            if (locationParts.Count > 0)
+            {
+                predicates.Add($"(JSON_VALUE(metadata, '$.source') = {sourceParam} AND ({string.Join(" OR ", locationParts)}))");
+            }
+            else
+            {
+                predicates.Add($"(JSON_VALUE(metadata, '$.source') = {sourceParam})");
+            }
+        }
+
+        command.CommandText = $"""
+            SELECT TOP (@limit) document, metadata
+            FROM Documents
+            WHERE JSON_VALUE(metadata, '$.content_kind') = @contentKind
+              AND ({string.Join(" OR ", predicates)})
+            ORDER BY id_int ASC;
+            """;
+
+        var results = new List<(string Document, JsonElement Metadata)>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add((
+                reader.GetString(reader.GetOrdinal("document")),
+                ParseMetadata(reader.GetString(reader.GetOrdinal("metadata")))));
+        }
+
+        return results;
+    }
     private async Task EnsureDatabaseAsync(CancellationToken cancellationToken)
     {
         var builder = new SqlConnectionStringBuilder(_connectionString);
@@ -435,6 +541,14 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         };
     }
 
+
+    private static LocationAnchor ExtractLocationAnchor(JsonElement metadata) => new(
+        GetMetadataString(metadata, "source"),
+        GetMetadataString(metadata, "page"),
+        GetMetadataString(metadata, "slide"),
+        GetMetadataString(metadata, "paragraph_index"));
+
+    private readonly record struct LocationAnchor(string? Source, string? Page, string? Slide, string? ParagraphIndex);
     private static JsonElement ParseMetadata(string metadataJson)
     {
         try
@@ -447,5 +561,10 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         }
     }
 }
+
+
+
+
+
 
 

@@ -1,15 +1,30 @@
 $ErrorActionPreference = "Stop"
 
-$Vm = "<VM_USERNAME>@<VM_IP>"
-$RemoteApp = "/home/<VM_USERNAME>/app_code"
-$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
-$Ctr = "sudo /var/lib/rancher/rke2/bin/ctr -a /run/k3s/containerd/containerd.sock -n k8s.io"
 $EnvFile = Join-Path $PSScriptRoot ".env.ps1"
 
 if (Test-Path -LiteralPath $EnvFile) {
     . $EnvFile
 }
 
+function Get-RequiredSetting {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value,
+        [Parameter(Mandatory = $true)]
+        [string]$Prompt
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        return $Value
+    }
+
+    return Read-Host $Prompt
+}
+
+$Vm = Get-RequiredSetting $env:DEPLOY_VM "Enter SSH target (user@host)"
+$RemoteApp = Get-RequiredSetting $env:DEPLOY_REMOTE_APP "Enter remote app path"
+$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
+$Ctr = "sudo /var/lib/rancher/rke2/bin/ctr -a /run/k3s/containerd/containerd.sock -n k8s.io"
 function Get-SqlUser {
     if (-not [string]::IsNullOrWhiteSpace($env:SQLSERVER_USER)) {
         return $env:SQLSERVER_USER

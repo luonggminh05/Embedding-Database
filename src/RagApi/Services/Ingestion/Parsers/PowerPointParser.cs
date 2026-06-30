@@ -27,6 +27,17 @@ public class PowerPointParser : IDocumentParser
         public int SlideAttempts { get; set; }
     }
 
+    /// <summary>Holds separated content extracted from a single slide.</summary>
+    private sealed class SlideContent
+    {
+        /// <summary>Text lines from shapes, tables, and inline image markers.</summary>
+        public List<string> InstructionalTexts { get; } = new();
+        /// <summary>Standalone chunks for large images (OCR + Vision caption).</summary>
+        public List<IngestedDocument> ImageChunks { get; } = new();
+        /// <summary>Running counter for images on the current slide.</summary>
+        public int ImageIndex { get; set; }
+    }
+
     public PowerPointParser(
         IOcrService ocrService,
         IVisionCaptionService visionCaptionService,
@@ -118,21 +129,31 @@ public class PowerPointParser : IDocumentParser
                 
                 visionBudget.SlideAttempts = 0;
                 var slidePart = (SlidePart)presentationPart.GetPartById(slideId.RelationshipId!);
-                var slideText = await ExtractTextFromSlideAsync(slidePart, fileName, slideIndex, visionBudget);
+                var slideContent = await ExtractSlideContentAsync(slidePart, fileName, slideIndex, visionBudget);
                 
-                if (!string.IsNullOrWhiteSpace(slideText))
+                // Emit instruction_text chunk (text from shapes/tables + inline image markers)
+                var instructionText = string.Join("\n", slideContent.InstructionalTexts);
+                if (!string.IsNullOrWhiteSpace(instructionText))
                 {
                     yield return new IngestedDocument
                     {
-                        PageContent = slideText,
+                        PageContent = $"[V\u0102N B\u1EA2N H\u01AF\u1EDA\u004E\u0047 D\u1EAAN]\n{instructionText}",
                         Metadata = new Dictionary<string, object>
                         {
                             { "source", fileName },
                             { "slide", slideIndex },
-                            { "type", "pptx_slide" }
+                            { "type", "pptx_slide" },
+                            { "content_kind", "instruction_text" }
                         }
                     };
                 }
+
+                // Emit each image_ui_description chunk separately
+                foreach (var imageChunk in slideContent.ImageChunks)
+                {
+                    yield return imageChunk;
+                }
+
                 slideIndex++;
             }
         }
@@ -166,12 +187,13 @@ public class PowerPointParser : IDocumentParser
             {
                 docs.Add(new IngestedDocument
                 {
-                    PageContent = text,
+                    PageContent = $"[V\u0102N B\u1EA2N H\u01AF\u1EDA\u004E\u0047 D\u1EAAN]\n{text}",
                     Metadata = new Dictionary<string, object>
                     {
                         { "source", fileName },
                         { "slide", slideIndex },
-                        { "type", "pptx_slide_text_fallback" }
+                        { "type", "pptx_slide_text_fallback" },
+                        { "content_kind", "instruction_text" }
                     }
                 });
             }
@@ -190,31 +212,30 @@ public class PowerPointParser : IDocumentParser
             : int.MaxValue;
     }
 
-    private async Task<string> ExtractTextFromSlideAsync(
+    private async Task<SlideContent> ExtractSlideContentAsync(
         SlidePart slidePart,
         string fileName,
         int slideIndex,
         VisionBudget visionBudget)
     {
-        var texts = new List<string>();
-        
-        
+        var content = new SlideContent();
+
         var slide = slidePart.Slide;
         var shapeTree = slide?.CommonSlideData?.ShapeTree;
-        if (shapeTree == null) return string.Empty;
+        if (shapeTree == null) return content;
 
         foreach (var element in shapeTree.Elements())
         {
-            await ProcessElementAsync(element, slidePart, texts, fileName, slideIndex, visionBudget);
+            await ProcessElementAsync(element, slidePart, content, fileName, slideIndex, visionBudget);
         }
 
-        return string.Join("\n", texts);
+        return content;
     }
 
     private async Task ProcessElementAsync(
         DocumentFormat.OpenXml.OpenXmlElement element,
         SlidePart slidePart,
-        List<string> texts,
+        SlideContent content,
         string fileName,
         int slideIndex,
         VisionBudget visionBudget)
@@ -222,7 +243,7 @@ public class PowerPointParser : IDocumentParser
         if (element is Shape shape)
         {
             var text = string.Join(" ", shape.Descendants<Text>().Select(t => t.Text)).Trim();
-            if (!string.IsNullOrWhiteSpace(text)) texts.Add(text);
+            if (!string.IsNullOrWhiteSpace(text)) content.InstructionalTexts.Add(text);
             return;
         }
 
@@ -237,40 +258,36 @@ public class PowerPointParser : IDocumentParser
                         .Select(cell => string.Join(" ", cell.Descendants<Text>().Select(t => t.Text)).Trim())
                         .Where(t => !string.IsNullOrWhiteSpace(t));
                     var rowString = string.Join(" | ", rowTexts);
-                    if (!string.IsNullOrWhiteSpace(rowString)) texts.Add(rowString);
+                    if (!string.IsNullOrWhiteSpace(rowString)) content.InstructionalTexts.Add(rowString);
                 }
             }
             else
             {
                 var text = string.Join(" ", graphicFrame.Descendants<Text>().Select(t => t.Text)).Trim();
-                if (!string.IsNullOrWhiteSpace(text)) texts.Add(text);
+                if (!string.IsNullOrWhiteSpace(text)) content.InstructionalTexts.Add(text);
             }
             return;
         }
 
         if (element is Picture picture)
         {
-            await ProcessPictureAsync(picture, slidePart, texts, fileName, slideIndex, visionBudget);
+            await ProcessPictureAsync(picture, slidePart, content, fileName, slideIndex, visionBudget);
             return;
         }
 
-    
         if (element is DocumentFormat.OpenXml.Presentation.GroupShape groupShape)
         {
-
             foreach (var child in groupShape.Elements())
             {
-                await ProcessElementAsync(child, slidePart, texts, fileName, slideIndex, visionBudget);
+                await ProcessElementAsync(child, slidePart, content, fileName, slideIndex, visionBudget);
             }
-       
         }
-    
     }
 
     private async Task ProcessPictureAsync(
         Picture picture,
         SlidePart slidePart,
-        List<string> texts,
+        SlideContent content,
         string fileName,
         int slideIndex,
         VisionBudget visionBudget)
@@ -300,16 +317,34 @@ public class PowerPointParser : IDocumentParser
             return;
         }
 
+        content.ImageIndex++;
+
+        var ocrText = await _ocrService.ExtractTextAsync(imageBytes);
+        var role = ImageContentClassifier.Classify(width, height, ocrText, _options.MinVisionImageWidth, _options.MinVisionImageHeight);
+
+        // --- Small image or short OCR (button/icon): inject inline marker into instruction text ---
+        if (role == ImageRole.InlineIcon)
+        {
+            content.InstructionalTexts.Add(ImageContentClassifier.BuildInlineMarker(ocrText));
+            return;
+        }
+
+        // --- Large image (screenshot/UI): add short placeholder to instruction text ---
+        content.InstructionalTexts.Add(ImageContentClassifier.BuildScreenshotPlaceholder());
+
+        // Build a separate image_ui_description chunk
         var metadata = new Dictionary<string, object>
         {
             { "source", fileName },
             { "slide", slideIndex },
-            { "type", "inline_image" },
+            { "type", "pptx_slide_image" },
+            { "content_kind", "image_ui_description" },
+            { "image_index", content.ImageIndex },
             { "width", width },
-            { "height", height }
+            { "height", height },
+            { "image_role", role.ToString().ToLower() }
         };
 
-        var ocrText = await _ocrService.ExtractTextAsync(imageBytes);
         string? caption = null;
         var visionAttempted = false;
 
@@ -320,29 +355,32 @@ public class PowerPointParser : IDocumentParser
         }
 
         var usefulCaption = VisionCaptionQuality.IsUseful(caption, ocrText) ? caption : null;
-        var imageParts = new List<string>
+        var descriptionParts = new List<string>
         {
             $"dimensions: {width}x{height}px"
         };
 
         if (!string.IsNullOrWhiteSpace(ocrText))
         {
-            imageParts.Add($"OCR text: {ocrText}");
+            descriptionParts.Add($"OCR text: {ocrText}");
         }
 
         if (!string.IsNullOrWhiteSpace(usefulCaption))
         {
-            imageParts.Add($"Vision caption: {usefulCaption}");
+            descriptionParts.Add($"Vision caption: {usefulCaption}");
         }
         else if (visionAttempted && string.IsNullOrWhiteSpace(ocrText))
         {
-            imageParts.Add("Vision caption was empty or filtered as unreliable");
+            descriptionParts.Add("Vision caption was empty or filtered as unreliable");
         }
 
-        if (imageParts.Count > 1 || visionAttempted)
+        if (descriptionParts.Count > 1 || visionAttempted)
         {
-            texts.Add($"[H\u00ECnh \u1EA3nh/N\u00FAt tr\u00EAn slide: {string.Join("; ", imageParts)}]");
-      
+            content.ImageChunks.Add(new IngestedDocument
+            {
+                PageContent = $"[M\u00D4 T\u1EA2 GIAO DI\u1EC6N T\u1EEA H\u00CCNH \u1EA2NH]\n[H\u00ECnh \u1EA3nh tr\u00EAn slide: {string.Join("; ", descriptionParts)}]",
+                Metadata = metadata
+            });
         }
     }
 

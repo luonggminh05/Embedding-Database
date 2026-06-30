@@ -60,7 +60,7 @@ public class ChatHub : Hub
             if (IsSimpleGreeting(message))
             {
                 await SendCompleteAnswerAsync(
-                    "Xin chào! Mình có thể giúp bạn hỏi đáp dựa trên tài liệu đã nạp.",
+                    "Xin ch\u00E0o! M\u00ECnh c\u00F3 th\u1EC3 gi\u00FAp b\u1EA1n h\u1ECFi \u0111\u00E1p d\u1EF1a tr\u00EAn t\u00E0i li\u1EC7u \u0111\u00E3 n\u1EA1p.",
                     [],
                     cancellationToken);
                 return;
@@ -71,18 +71,42 @@ public class ChatHub : Hub
                 ? Math.Clamp(100, 1, Math.Max(1, _searchOptions.TopKMax))
                 : Math.Clamp(_searchOptions.ChatTopK, 1, Math.Max(1, _searchOptions.TopKMax));
 
-            var (embedding, _) = await _embeddingService.EmbedQueryCachedAsync(effectiveMessage, cancellationToken);
-            var searchResults = await _repository.SearchAsync(effectiveMessage, embedding, requestedTopK, cancellationToken);
+            var queryIntent = QueryClassifier.Classify(effectiveMessage);
+            var primaryContentKind = GetPrimaryContentKind(queryIntent);
+            var relatedContentKind = GetRelatedContentKind(queryIntent);
 
-            var documents = searchResults.Documents.Count > 0 ? searchResults.Documents[0] : [];
+            var (embedding, _) = await _embeddingService.EmbedQueryCachedAsync(effectiveMessage, cancellationToken);
+            var searchResults = await _repository.SearchAsync(effectiveMessage, embedding, requestedTopK, cancellationToken, primaryContentKind);
+
+            var documents = searchResults.Documents.Count > 0 ? searchResults.Documents[0].ToList() : [];
+            var metadatas = searchResults.Metadatas.Count > 0 ? searchResults.Metadatas[0].ToList() : [];
+
+            if (documents.Count == 0 && primaryContentKind != null)
+            {
+                searchResults = await _repository.SearchAsync(effectiveMessage, embedding, requestedTopK, cancellationToken);
+                documents = searchResults.Documents.Count > 0 ? searchResults.Documents[0].ToList() : [];
+                metadatas = searchResults.Metadatas.Count > 0 ? searchResults.Metadatas[0].ToList() : [];
+            }
+
+            if (relatedContentKind != null && metadatas.Count > 0)
+            {
+                var relatedChunks = await _repository.GetRelatedChunksAsync(
+                    metadatas,
+                    relatedContentKind,
+                    Math.Clamp(_searchOptions.ChatTopK, 1, 10),
+                    cancellationToken);
+
+                AppendRelatedChunks(documents, metadatas, relatedChunks);
+            }
+
             var citations = BuildFrontendCitations(searchResults);
-            var contextText = BuildContextText(documents, searchResults.Metadatas.Count > 0 ? searchResults.Metadatas[0] : []);
+            var contextText = BuildContextText(documents, metadatas, queryIntent);
 
             RememberLookupTarget(effectiveMessage);
 
             if (string.IsNullOrWhiteSpace(contextText))
             {
-                await SendCompleteAnswerAsync("Mình chưa tìm thấy thông tin này trong tài liệu đã nạp.", citations, cancellationToken);
+                await SendCompleteAnswerAsync("M\u00ECnh ch\u01B0a t\u00ECm th\u1EA5y th\u00F4ng tin n\u00E0y trong t\u00E0i li\u1EC7u \u0111\u00E3 n\u1EA1p.", citations, cancellationToken);
                 return;
             }
 
@@ -100,22 +124,26 @@ public class ChatHub : Hub
                 Luật trả lời:
                 - Chỉ dùng thông tin trong NGỮ CẢNH.
                 - Không bịa, không thêm kiến thức ngoài tài liệu.
-                - If the context contains any relevant information, answer with the information found. If only part of the answer is missing, provide the found part and clearly say which part was not found in the documents.
-                - Trả lời ngắn gọn, đầy đủ thông tin, trực tiếp bằng tiếng Việt.
-                - Always answer the user in natural Vietnamese. If context contains English technical section titles such as SEARCH_CONDITIONS, DATA_TABLES, QUESTION_ANSWER_HINTS, or SEARCHABLE_SUMMARY, use them only as internal data and do not switch the final answer to English unless the user asks.
-                - Do not repeat the same sentence, paragraph, example, or closing phrase.
-                - Avoid generic advice or writing-template advice when the user asks about software usage; prefer concrete UI instructions from the context.
-                - If the context is about software UI instructions, answer with the concrete UI steps, menu names, fields, buttons, panels, and tabs found in the context.
-                - Keep any closing sentence to at most one short sentence, and do not repeat it.
+                - Nếu ngữ cảnh có thông tin liên quan, hãy trả lời bằng phần tìm thấy. Nếu thiếu một phần, nói rõ phần nào chưa thấy trong tài liệu.
+                - Trả lời ngắn gọn, đủ thông tin, trực tiếp bằng tiếng Việt tự nhiên.
+                - Không lặp lại cùng một câu, đoạn, ví dụ, hoặc lời kết.
+                - Khi hỏi về thao tác phần mềm, ưu tiên các bước cụ thể, tên menu, trường, nút, panel, tab trong ngữ cảnh.
+                - Giữ câu kết, nếu có, tối đa một câu ngắn.
+
+                Luật ưu tiên nội dung:
+                - NGỮ CẢNH có thể có hai loại đoạn: [VĂN BẢN HƯỚNG DẪN] và [MÔ TẢ GIAO DIỆN TỪ HÌNH ẢNH].
+                - Khi người dùng hỏi CÁCH THAO TÁC, hãy ưu tiên trả lời từ [VĂN BẢN HƯỚNG DẪN]. Chỉ dùng [MÔ TẢ GIAO DIỆN TỪ HÌNH ẢNH] để bổ sung vị trí nút/trường nếu cần.
+                - Khi người dùng hỏi VỊ TRÍ hoặc GIAO DIỆN, hãy dùng [MÔ TẢ GIAO DIỆN TỪ HÌNH ẢNH] để trả lời, và dùng text hướng dẫn cùng trang/slide để hiểu bối cảnh.
+                - Không để mô tả giao diện từ hình ảnh thay thế hoặc lấn át các bước thao tác gốc nếu văn bản hướng dẫn đã đề cập.
                 """;
 
             var chatHistory = new ChatHistory(systemMessage);
             chatHistory.AddUserMessage($"""
-                <NGỮ_CẢNH>
+                <NG\u1EEE_C\u1EA2NH>
                 {contextText}
-                </NGỮ_CẢNH>
+                </NG\u1EEE_C\u1EA2NH>
 
-                Câu hỏi: {effectiveMessage}
+                C\u00E2u h\u1ECFi: {effectiveMessage}
                 """);
 
             await Clients.Caller.SendAsync("ReceiveCitations", citations, cancellationToken);
@@ -128,7 +156,7 @@ public class ChatHub : Hub
                 FrequencyPenalty = 0.6,
                 PresencePenalty = 0,
                 MaxTokens = 350,
-                StopSequences = ["\nNgu?n t�i li?u:", "\nNguồn tài liệu:"]
+                StopSequences = ["\nNgu\u1ED3n t\u00E0i li\u1EC7u:"]
             };
 
             var stream = _chatCompletion.GetStreamingChatMessageContentsAsync(
@@ -158,7 +186,7 @@ public class ChatHub : Hub
         catch (Exception ex)
         {
             Console.WriteLine($"Error in Ask: {ex}");
-            await Clients.Caller.SendAsync("ReceiveToken", "\n[Lỗi kết nối tới mô hình AI hoặc Database]");
+            await Clients.Caller.SendAsync("ReceiveToken", "\n[L\u1ED7i k\u1EBFt n\u1ED1i t\u1EDBi m\u00F4 h\u00ECnh AI ho\u1EB7c Database]");
             await Clients.Caller.SendAsync("ChatEnded");
         }
     }
@@ -228,7 +256,7 @@ public class ChatHub : Hub
             && _chatMemory.TryGetValue(GetLastLookupKey(), out string? lastLookup)
             && !string.IsNullOrWhiteSpace(lastLookup))
         {
-            return $"{lastLookup} là của ai";
+            return $"{lastLookup} l\u00E0 c\u1EE7a ai";
         }
 
         return message;
@@ -287,11 +315,46 @@ public class ChatHub : Hub
         return citations;
     }
 
-    private static string BuildContextText(IReadOnlyList<string> documents, IReadOnlyList<JsonElement> metadatas)
+
+    private static string? GetPrimaryContentKind(QueryIntent intent) => intent switch
     {
-        var chunks = new List<string>();
+        QueryIntent.TaskInstruction => "instruction_text",
+        QueryIntent.UiLocation => "image_ui_description",
+        _ => null
+    };
+
+    private static string? GetRelatedContentKind(QueryIntent intent) => intent switch
+    {
+        QueryIntent.TaskInstruction => "image_ui_description",
+        QueryIntent.UiLocation => "instruction_text",
+        _ => null
+    };
+
+    private static void AppendRelatedChunks(
+        List<string> documents,
+        List<JsonElement> metadatas,
+        IReadOnlyList<(string Document, JsonElement Metadata)> relatedChunks)
+    {
+        var seen = new HashSet<string>(documents.Select(NormalizeText), StringComparer.Ordinal);
+
+        foreach (var (document, metadata) in relatedChunks)
+        {
+            if (string.IsNullOrWhiteSpace(document) || !seen.Add(NormalizeText(document)))
+            {
+                continue;
+            }
+
+            documents.Add(document);
+            metadatas.Add(metadata);
+        }
+    }
+    private static string BuildContextText(IReadOnlyList<string> documents, IReadOnlyList<JsonElement> metadatas, QueryIntent intent)
+    {
+        // Partition documents into instruction_text and image_ui_description
+        var instructionChunks = new List<(string document, JsonElement metadata)>();
+        var imageChunks = new List<(string document, JsonElement metadata)>();
+        var otherChunks = new List<(string document, JsonElement metadata)>();
         var seenDocuments = new HashSet<string>(StringComparer.Ordinal);
-        var chunkNumber = 0;
 
         for (var i = 0; i < documents.Count; i++)
         {
@@ -303,14 +366,72 @@ public class ChatHub : Hub
             }
 
             var metadata = i < metadatas.Count ? metadatas[i] : default;
-            chunkNumber++;
-            chunks.Add($"""
-                [DOAN {chunkNumber} - {BuildSourceLabel(metadata)}]
-                {document}
-                """);
+            var contentKind = GetMetadataString(metadata, "content_kind");
+
+            if (string.Equals(contentKind, "image_ui_description", StringComparison.OrdinalIgnoreCase))
+            {
+                imageChunks.Add((document, metadata));
+            }
+            else if (string.Equals(contentKind, "instruction_text", StringComparison.OrdinalIgnoreCase))
+            {
+                instructionChunks.Add((document, metadata));
+            }
+            else
+            {
+                otherChunks.Add((document, metadata));
+            }
         }
 
-        return string.Join("\n\n---\n\n", chunks);
+        var sections = new List<string>();
+        var chunkNumber = 0;
+
+        // Determine block ordering based on query intent
+        var primaryChunks = intent == QueryIntent.UiLocation ? imageChunks : instructionChunks;
+        var primaryLabel = intent == QueryIntent.UiLocation
+            ? "MÔ TẢ TRỰC QUAN GIAO DIỆN TỪ ẢNH"
+            : "VĂN BẢN HƯỚNG DẪN THAO TÁC";
+        var secondaryChunks = intent == QueryIntent.UiLocation ? instructionChunks : imageChunks;
+        var secondaryLabel = intent == QueryIntent.UiLocation
+            ? "VĂN BẢN HƯỚNG DẪN THAO TÁC"
+            : "MÔ TẢ TRỰC QUAN GIAO DIỆN TỪ ẢNH";
+
+        // Build primary block
+        if (primaryChunks.Count > 0)
+        {
+            var block = new List<string> { $"=== {primaryLabel} ===" };
+            foreach (var (document, metadata) in primaryChunks)
+            {
+                chunkNumber++;
+                block.Add($"[ĐOẠN {chunkNumber} - {BuildSourceLabel(metadata)}]\n{document}");
+            }
+            sections.Add(string.Join("\n\n", block));
+        }
+
+        // Build secondary block
+        if (secondaryChunks.Count > 0)
+        {
+            var block = new List<string> { $"=== {secondaryLabel} ===" };
+            foreach (var (document, metadata) in secondaryChunks)
+            {
+                chunkNumber++;
+                block.Add($"[ĐOẠN {chunkNumber} - {BuildSourceLabel(metadata)}]\n{document}");
+            }
+            sections.Add(string.Join("\n\n", block));
+        }
+
+        // Append chunks without content_kind (legacy data)
+        if (otherChunks.Count > 0)
+        {
+            var block = new List<string>();
+            foreach (var (document, metadata) in otherChunks)
+            {
+                chunkNumber++;
+                block.Add($"[ĐOẠN {chunkNumber} - {BuildSourceLabel(metadata)}]\n{document}");
+            }
+            sections.Add(string.Join("\n\n", block));
+        }
+
+        return string.Join("\n\n---\n\n", sections);
     }
 
     private static bool TryAnswerFromStructuredContext(string question, IReadOnlyList<string> documents, out string answer)
@@ -365,7 +486,7 @@ public class ChatHub : Hub
             {
                 answer = !string.IsNullOrWhiteSpace(email)
                     ? $"Email của {fullName ?? nameQuery} là {email}."
-                    : "Mình tìm thấy người này trong tài liệu nhưng chưa thấy email trong dòng dữ liệu.";
+                    : "M\u00ECnh t\u00ECm th\u1EA5y ng\u01B0\u1EDDi n\u00E0y trong t\u00E0i li\u1EC7u nh\u01B0ng ch\u01B0a th\u1EA5y email trong d\u00F2ng d\u1EEF li\u1EC7u.";
                 return true;
             }
 
@@ -378,7 +499,7 @@ public class ChatHub : Hub
 
         if (!string.IsNullOrWhiteSpace(id) || !string.IsNullOrWhiteSpace(nameQuery))
         {
-            answer = "Mình chưa tìm thấy thông tin này trong tài liệu đã nạp.";
+            answer = "M\u00ECnh ch\u01B0a t\u00ECm th\u1EA5y th\u00F4ng tin n\u00E0y trong t\u00E0i li\u1EC7u \u0111\u00E3 n\u1EA1p.";
             return true;
         }
 
@@ -390,12 +511,12 @@ public class ChatHub : Hub
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(studentId))
         {
-            parts.Add($"Mã số ID: {studentId}");
+            parts.Add($"M\u00E3 s\u1ED1 ID: {studentId}");
         }
 
         if (!string.IsNullOrWhiteSpace(fullName))
         {
-            parts.Add($"Họ tên: {fullName}");
+            parts.Add($"H\u1ECD t\u00EAn: {fullName}");
         }
 
         if (!string.IsNullOrWhiteSpace(email))
@@ -405,11 +526,11 @@ public class ChatHub : Hub
 
         if (!string.IsNullOrWhiteSpace(className))
         {
-            parts.Add($"Lớp: {className}");
+            parts.Add($"L\u1EDBp: {className}");
         }
 
         return parts.Count == 0
-            ? "Mình chưa tìm thấy thông tin này trong tài liệu đã nạp."
+            ? "M\u00ECnh ch\u01B0a t\u00ECm th\u1EA5y th\u00F4ng tin n\u00E0y trong t\u00E0i li\u1EC7u \u0111\u00E3 n\u1EA1p."
             : string.Join(", ", parts) + ".";
     }
 
@@ -544,6 +665,7 @@ public class ChatHub : Hub
             || ContainsAny(normalized, "mssv", "ma so id", "ma id", "ma so sinh vien", "email", "mail", "thu dien tu", "lop", "cua ai");
     }
 
+
     private static string? FindIdentifier(string text)
     {
         var match = Regex.Match(text, @"\b\d{6,}\b");
@@ -560,7 +682,7 @@ public class ChatHub : Hub
 
         var match = Regex.Match(
             text,
-            @"(?:email|mail|thư điện tử)\s+(?:của|cua)\s+(.+?)(?:\s+(?:là|la)\s+gì|[?？])?$",
+            @"(?:email|mail|th\u01B0 \u0111i\u1EC7n t\u1EED)\s+(?:c\u1EE7a|cua)\s+(.+?)(?:\s+(?:l\u00E0|la)\s+g\u00EC|[?\uFF1F])?$",
             RegexOptions.IgnoreCase);
 
         if (match.Success)
@@ -568,7 +690,7 @@ public class ChatHub : Hub
             return match.Groups[1].Value.Trim();
         }
 
-        match = Regex.Match(text, @"(?:của|cua)\s+(.+?)(?:\s+(?:là|la)\s+gì|[?？])?$", RegexOptions.IgnoreCase);
+        match = Regex.Match(text, @"(?:c\u1EE7a|cua)\s+(.+?)(?:\s+(?:l\u00E0|la)\s+g\u00EC|[?\uFF1F])?$", RegexOptions.IgnoreCase);
         var name = match.Success ? match.Groups[1].Value.Trim() : null;
         var normalizedName = name != null ? NormalizeText(name) : null;
         return normalizedName == "ai" || normalizedName == "ai vay" ? null : name;
@@ -606,3 +728,7 @@ public class ChatHub : Hub
         return string.Join(' ', builder.ToString().Normalize(NormalizationForm.FormC).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 }
+
+
+
+

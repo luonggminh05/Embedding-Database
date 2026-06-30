@@ -1,5 +1,6 @@
 import { Injectable, signal, WritableSignal } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
+import { API_BASE_URL } from '../app.constants';
 
 export interface ChatMessage {
   role: 'user' | 'bot';
@@ -12,7 +13,7 @@ export interface ChatMessage {
 })
 export class ChatService {
   private hubConnection: signalR.HubConnection | undefined;
-  private readonly hubUrl = 'http://<VM_IP>:30001/chathub';
+  private readonly hubUrl = `${API_BASE_URL}/chathub`;
 
   public messages = signal<ChatMessage[]>([]);
   public isResponding = signal<boolean>(false);

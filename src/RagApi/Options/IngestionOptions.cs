@@ -18,6 +18,7 @@ public class IngestionOptions
     public int VisionTimeoutSeconds { get; set; } = 60;
     public int MaxVisionImagesPerSlide { get; set; } = 0;
     public int MaxVisionImagesPerFile { get; set; } = 0;
+    public int MaxConcurrentVisionCalls { get; set; } = 3;
 
     public void Validate()
     {
@@ -29,5 +30,6 @@ public class IngestionOptions
         if (VisionTimeoutSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(VisionTimeoutSeconds), "VisionTimeoutSeconds must be > 0");
         if (MaxVisionImagesPerSlide < 0) throw new ArgumentOutOfRangeException(nameof(MaxVisionImagesPerSlide), "MaxVisionImagesPerSlide must be >= 0; use 0 for unlimited");
         if (MaxVisionImagesPerFile < 0) throw new ArgumentOutOfRangeException(nameof(MaxVisionImagesPerFile), "MaxVisionImagesPerFile must be >= 0; use 0 for unlimited");
+        if (MaxConcurrentVisionCalls <= 0) throw new ArgumentOutOfRangeException(nameof(MaxConcurrentVisionCalls), "MaxConcurrentVisionCalls must be > 0");
     }
 }
