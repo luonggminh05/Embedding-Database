@@ -1,0 +1,272 @@
+
+=================== ppt/slides/slide1.xml ===================
+'HƯỚNG DẪN SỬ DỤNG\nPHẦN MỀM QUẢN LÝ TÀI SẢN'
+'GIAI ĐOẠN 3 – TỜ TRÌNH NGHIỆP VỤ'
+'KHÓA HỌC ĐÀO TẠO'
+
+=================== ppt/slides/slide2.xml ===================
+'Chức năng thao tác:'
+'Tờ trình nghiệp vụ'
+'Chức năng tạo phiếu tạm ứng:'
+'Mục đích: Dựa vào tờ trình này, hệ thống sẽ tạo phiếu tờ trình nghiệp vụ. Ngày tạo tờ trình sẽ được chỉ định bên trong tờ trình.'
+'Đối tượng sử dụng: tất cả'
+'Thao tác:'
+'Tìm kiếm'
+'Tạo mới '
+'Chỉnh sửa '
+'Phê duyệt'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide3.xml ===================
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Chức năng tờ trình nghiệp vụ'
+'Hệ thống hiển thị giao diện chức năng.'
+
+=================== ppt/slides/slide4.xml ===================
+'Phiếu tờ trình nghiệp vụ – Tìm kiếm'
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ, trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút\t   để tìm.'
+'Bước 3: Nếu có tờ trình nghiệp vụ tự động thỏa mãn điều kiện tìm ở trên, hệ thống sẽ liệt kê các tờ trình tìm được trong danh sách (lưới) bên dưới. Muốn xem chi tiết Tờ trình  nào, click chọn Tờ trình  muốn xem trong danh sách (lưới) và click nút                    hoặc có thể nhấn đúp vào tờ trình trong danh sách để xem.'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide5.xml ===================
+'Phiếu tờ trình nghiệp vụ – Tìm kiếm'
+'Bấm để tìm kiếm'
+'Vùng điều kiện tìm kiếm'
+'Vùng kết quả tìm kiếm'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide6.xml ===================
+'Các bước thực hiện: '
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ.'
+'Bước 3: Click nút Thêm mới                  trên thanh công cụ để thêm mới Tờ trình nghiệp vụ.'
+'Bước 4: Trong màn hình thêm mới, nhập các thông tin chi tiết cho Tờ trình nghiệp vụ.'
+'Bước 5: Sau khi hoàn tất nhập thông tin Tờ trình , click nút lưu              để hoàn thành tạo mới Tờ trình .'
+'Bước 6: Click                   để gửi tờ trình đến người có thẩm quyền duyệt phiếu'
+'Tờ trình nghiệp vụ – Thêm mới'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide7.xml ===================
+'Tờ trình nghiệp vụ – Thêm mới'
+'Chọn loại tờ trình'
+'Nhập tiêu đề'
+'Nhập số tờ(không bắt buộc) '
+'Nhập Tên tờ trình '
+'Nhập Nơi lập'
+'Đính kèm file'
+'Đính kèm hình ảnh'
+'Chọn kế hoạch(có thể không chọn)'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide8.xml ===================
+'Loại tờ trình: Người tạo phiếu có thể chọn loại tờ trình có sẵn thông tin để thêm vào tờ trình'
+'Tên tờ trình: Người tạo phiếu có thể nhập tên tờ trình.'
+'Số tờ trình: Người tạo phiếu có thể nhập số tờ trình hoặc để hệ thống tự sinh.'
+'Tiêu đề: Người tạo phiếu có thể nhập tiêu đề tờ trình.'
+'Nơi lập: Người tạo phiếu nhập nơi lập tờ trình'
+'Ngày lập: Người tạo phiếu chọn ngày cho tờ trình'
+'Kính gửi: Người tạo phiếu nhập nơi nhận tờ trình'
+'File đính kèm: Người tạo phiếu đính kèm file cho tờ trình'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Tờ trình nghiệp vụ – Thêm mới'
+
+=================== ppt/slides/slide9.xml ===================
+'Tờ trình có 2 luồng duyệt song song và tuần tự:'
+'Luồng duyệt song song: Các user nằm cùng trong 1 nhóm duyệt sẽ duyệt song song. Tất cả user nằm trong nhóm duyệt này duyệt tờ trình thì tờ trình mới đi đến cấp duyệt tiếp theo'
+'Luồng duyệt trình tự: Bấm thêm nhóm duyệt để thêm cấp duyệt. Thứ tự cấp duyệt sẽ đi từ trái sáng phải.'
+'Tờ trình nghiệp vụ – Thêm mới'
+'Bấm để thêm nhóm duyệt'
+'Chọn người duyệt trong nhóm'
+'Bấm để xóa nhóm duyệt'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide10.xml ===================
+'Tờ trình nghiệp vụ – Thêm mới- Đính kèm ảnh'
+'Bấm để chọn ảnh'
+'Bấm để coppy link ảnh.'
+'Bấm để xác nhận danh sách ảnh.'
+'B1: Bấm\t   để  chọn ảnh từ máy tính'
+'B2: Coppy link ảnh'
+'B3: Bấm xác nhận.'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide11.xml ===================
+'Tờ trình nghiệp vụ – Thêm mới- Đính kèm ảnh'
+'B4: Bấm\t   để thực hiện thao tác chèn ảnh. '
+'Bấm để chọn chức năng chèn ảnh'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide12.xml ===================
+'Tờ trình nghiệp vụ – Thêm mới- Đính kèm ảnh'
+'B5: Bấm dán link ảnh vừa coppy vào URL'
+'Dán link ảnh vừa coppy vào URL'
+'Lưu ý: Ngoài ra còn có thể coppy trực tiếp ảnh từ file word hoặc excel để dán nội dung tờ trình'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide13.xml ===================
+'Tờ trình nghiệp vụ – Thêm mới- Đính kèm ảnh'
+'Lưu ý: Ngoài ra còn có thể coppy trực tiếp ảnh từ file word hoặc excel để dán nội dung tờ trình'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide14.xml ===================
+'Tờ trình nghiệp vụ – Lưu nháp'
+'Bấm để lưu tờ trình'
+'Thông báo lưu thành công'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide15.xml ===================
+'Gửi phê duyệt Tờ trình nghiệp vụ'
+'B5: Bấm \tđể gửi phê duyệt tờ trình'
+'Thông báo gửi duyệt thành công'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide16.xml ===================
+'\tSau khi gửi duyệt, mail sẽ gửi đến tất cả các user có trong nhóm duyệt đầu tiền. Đến khi nhóm duyệt đầu tiên duyệt hết sẽ gửi đến nhóm duyệt tiếp theo cho đến hết.'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Clik vào đây để truy cập tờ trình. '
+
+=================== ppt/slides/slide17.xml ===================
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút\tđể tìm '
+'Bước 3: Muốn duyệt Tờ trình nghiệp vụ, người dùng nhấp vào nút xem chi tiết               để vào màn hình phê duyệt.'
+'Bước 4: Nhấn                để duyệt Tờ trình nghiệp vụ.'
+'Tờ trình nghiệp vụ– Phê duyệt'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide18.xml ===================
+'Tờ trình nghiệp vụ – Phê duyệt'
+'Bấm duyệt để duyệt phiếu'
+'Nội dung tờ trình(không thể thay đổi'
+'Người duyệt hiện tại'
+'Danh sách nhóm duyệt'
+'Lịch sử thao tác trên tờ trình'
+'Thêm ghi chú/đính kèm file'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide19.xml ===================
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút\tđể tìm '
+'Bước 3: Muốn duyệt Tờ trình nghiệp vụ, người dùng nhấp vào nút xem chi tiết                để vào màn hình phê duyệt.'
+'Bước 4: Nhấn                để từ chối Tờ trình nghiệp vụ'
+'Tờ trình nghiệp vụ – Từ chối'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide20.xml ===================
+'Bấm từ chối để từ chối phiếu'
+'Nội dung tờ trình(không thể thay đổi'
+'Người duyệt hiện tại'
+'Danh sách nhóm duyệt'
+'Lịch sử thao tác trên tờ trình'
+'Thêm ghi chú/đính kèm file'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Tờ trình nghiệp vụ – Từ chối'
+
+=================== ppt/slides/slide21.xml ===================
+'\tSau khi từ chối, người được tạo sẽ nhận được mail khi từ chối.'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Clik vào đây để truy cập tờ trình. '
+
+=================== ppt/slides/slide22.xml ===================
+'Sau khi nhấn              hệ thống hiển thị popup thông báo nhập nội dung từ chối, nhập nội dung, sau đó nhấn\t '
+'nếu muốn từ chối phiếu, nhấn                  nếu chưa muốn từ chối phiếu.'
+'Tờ trình nghiệp vụ – Từ chối'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide23.xml ===================
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút                  \tđể tìm '
+'Bước 3: Muốn duyệt Tờ trình nghiệp vụ, người dùng nhấp vào nút xem chi tiết                để vào màn hình phê duyệt.'
+'Bước 4: Nhấn                    để ủy quyền Tờ trình nghiệp vụ'
+'Tờ trình nghiệp vụ –Ủy quyền'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide24.xml ===================
+'Tờ trình nghiệp vụ – Ủy quyền'
+'Bấm ủy quyền để ủy quyền phiếu'
+'Nội dung tờ trình(không thể thay đổi'
+'Người duyệt hiện tại'
+'Danh sách nhóm duyệt'
+'Lịch sử thao tác trên tờ trình'
+'Thêm ghi chú/đính kèm file'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide25.xml ===================
+'Sau khi nhấn              hệ thống hiển thị popup thông báo chọn người được ủy quyền, chọn người được nhận ủy quyền, sau đó nhấn\t     nếu muốn ủy quyền phiếu, nhấn                  nếu chưa muốn ủy quyền phiếu.'
+'Tờ trình nghiệp vụ – Ủy quyền'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide26.xml ===================
+'\tSau khi ủy quyền, người được ủy quyền sẽ nhận được mail.'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Clik vào đây để truy cập tờ trình. '
+
+=================== ppt/slides/slide27.xml ===================
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút                  \tđể tìm '
+'Bước 3: Muốn duyệt Tờ trình nghiệp vụ, người dùng nhấp vào nút xem chi tiết                để vào màn hình phê duyệt.'
+'Bước 4: Nhấn                   để bàn giao Tờ trình nghiệp vụ'
+'Tờ trình nghiệp vụ –Bàn giao'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide28.xml ===================
+'Bấm Bàn giao để bàn giao phiếu'
+'Nội dung tờ trình(không thể thay đổi'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+'Tờ trình nghiệp vụ – Bàn giao'
+
+=================== ppt/slides/slide29.xml ===================
+'Sau khi nhấn              hệ thống hiển thị popup thông báo chọn người được ủy quyền, chọn người được nhận bàn giao, sau đó nhấn\t nếu muốn bàn giao phiếu, nhấn                   nếu chưa muốn bàn giao phiếu.'
+'Tờ trình nghiệp vụ – Bàn giao'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide30.xml ===================
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút                  \tđể tìm '
+'Bước 3: Muốn duyệt Tờ trình nghiệp vụ, người dùng nhấp vào nút xem chi tiết               để vào màn hình phê duyệt.'
+'Bước 4: Nhấn                 để chia sẻ Tờ trình nghiệp vụ'
+'Tờ trình nghiệp vụ – Chia sẻ'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide31.xml ===================
+'Tờ trình nghiệp vụ – Chia sẻ'
+'Bấm Chia sẻ để chia sẻ phiếu'
+'Nội dung tờ trình(không thể thay đổi'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide32.xml ===================
+'Sau khi nhấn              hệ thống hiển thị popup thông báo chọn danh sách người được chia sẻ, chọn danh sách người được chia sẻ, sau đó nhấn\t           nếu muốn chia sẻ phiếu, nhấn                 nếu chưa muốn chia sẻ phiếu.'
+'Tờ trình nghiệp vụ – Chia sẻ'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide33.xml ===================
+'Các bước thực hiện:'
+'Bước 1: Đăng nhập vào hệ thống.'
+'Bước 2: Chọn mục Tờ trình nghiệp vụ trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút \tđể tìm '
+'Bước 3: Muốn duyệt Tờ trình nghiệp vụ, người dùng nhấp vào nút xem chi tiết                để vào màn hình phê duyệt.'
+'Bước 4: Nhấn             để in Tờ trình nghiệp vụ'
+'Tờ trình nghiệp vụ – Thêm ghi chú/ In tờ trình'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide34.xml ===================
+'Tờ trình nghiệp vụ – Thêm ghi chú/ In tờ trình'
+'Bấm In để in phiếu'
+'Nội dung tờ trình(không thể thay đổi'
+'Check vào Ô để in kèm lịch sử duyệt phiếu'
+'Bấm vào thêm ghi chú để thêm ghi chú.'
+'Bấm Chọn file để thêm file đính kèm'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide35.xml ===================
+'Sau khi nhấn          hệ thống hiển thị tab mới để in thông tin tờ trình, người dùng có thể thực hiện các thao tác dùng để in như: máy in, file PDF.'
+'Tờ trình nghiệp vụ – Thêm ghi chú/ In tờ trình'
+'3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ'
+
+=================== ppt/slides/slide36.xml ===================
+'Trân trọng cám ơn!'

@@ -43,18 +43,18 @@ public class DocumentIngestionService
         int globalChunkIndex = 0;
         int docCount = 0;
 
-        // Drop DiskANN vector index once before all DML operations.
-        // SQL Server blocks INSERT/UPDATE/DELETE while this index exists.
-        await _repository.DropVectorIndexAsync(cancellationToken);
-
         try
         {
+            await _repository.DropVectorIndexAsync(cancellationToken);
+            await _repository.DeleteDocumentsForFileAsync(relativePath, fileInfo.Name, cancellationToken);
+
             await foreach (var doc in _parser.ParseStreamAsync(filePath).WithCancellation(cancellationToken))
             {
                 docCount++;
 
                 List<IngestedDocument> chunks;
-                if (isTabular)
+                var isSlide = doc.Metadata.TryGetValue("type", out var typeObj) && typeObj?.ToString()?.StartsWith("pptx_slide") == true;
+                if (isTabular || isSlide)
                 {
                     chunks = new List<IngestedDocument> { doc };
                 }
@@ -98,6 +98,7 @@ public class DocumentIngestionService
                             Ids = ids,
                             Metadatas = metadatas
                         };
+
 
                         await _repository.UpsertDocumentsAsync(request, embeddings, cancellationToken);
                         _logger.LogInformation("Saved {Count} chunks to DB for {FilePath} (total chunks so far: {Total})", batch.Count, filePath, globalChunkIndex);

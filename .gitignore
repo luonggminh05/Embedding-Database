@@ -17,3 +17,5 @@ src/**/publish*/
 .codex-build/
 ragapi.*.log
 .github/agents/
+scratch/bin/
+scratch/obj/

@@ -1,0 +1,15 @@
+--- DOC CHUNK ---
+[SLIDE: Phiếu tờ trình nghiệp vụ – Tìm kiếm]
+[VĂN BẢN HƯỚNG DẪN]
+Phiếu tờ trình nghiệp vụ – Tìm kiếm
+--- DOC CHUNK ---
+[SLIDE: Phiếu tờ trình nghiệp vụ – Tìm kiếm]
+[VĂN BẢN HƯỚNG DẪN]
+Các bước thực hiện:
+Bước 1: Đăng nhập vào hệ thống
+Bước 2: Chọn mục Tờ trình nghiệp vụ, trong màn hình Tìm kiếm thông tin, nhập các thông tin tìm kiếm như Loại tờ trình, số tờ trình, tiêu đề, Tình trạng duyệt, v.v…; sau đó click nút [nút] để tìm.
+Bước 3: Nếu có tờ trình nghiệp vụ tự động thỏa mãn điều kiện tìm ở trên, hệ thống sẽ liệt kê các tờ trình tìm được trong danh sách (lưới) bên dưới. Muốn xem chi tiết Tờ trình nào, click chọn Tờ trình muốn xem trong danh sách (lưới) và click nút [nút] hoặc có thể nhấn đúp vào tờ trình trong danh sách để xem.
+--- DOC CHUNK ---
+[SLIDE: Phiếu tờ trình nghiệp vụ – Tìm kiếm]
+[VĂN BẢN HƯỚNG DẪN]
+3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ

@@ -1,0 +1,21 @@
+--- DOC CHUNK ---
+Metadata: {"source":"Slide dao tao Phan mem QLTS GD 3 - T\u1EDD tr\u00ECnh nghi\u1EC7p v\u1EE5.pptx","slide":6,"type":"pptx_slide","content_kind":"instruction_text","instruction_role":"procedure_steps","slide_title":"B\u01B0\u1EDBc 2: Ch\u1ECDn m\u1EE5c T\u1EDD tr\u00ECnh nghi\u1EC7p v\u1EE5.","action_kind":"them_moi","step_count":6}
+[SLIDE: Bước 2: Chọn mục Tờ trình nghiệp vụ.]
+[VĂN BẢN HƯỚNG DẪN]
+Các bước thực hiện:
+Bước 1: Đăng nhập vào hệ thống.
+Bước 2: Chọn mục Tờ trình nghiệp vụ.
+Bước 3: Click nút Thêm mới [nút] trên thanh công cụ để thêm mới Tờ trình nghiệp vụ.
+Bước 4: Trong màn hình thêm mới, nhập các thông tin chi tiết cho Tờ trình nghiệp vụ.
+Bước 5: Sau khi hoàn tất nhập thông tin Tờ trình , click nút lưu [nút] để hoàn thành tạo mới Tờ trình .
+Bước 6: Click [nút] để gửi tờ trình đến người có thẩm quyền duyệt phiếu
+--- DOC CHUNK ---
+Metadata: {"source":"Slide dao tao Phan mem QLTS GD 3 - T\u1EDD tr\u00ECnh nghi\u1EC7p v\u1EE5.pptx","slide":6,"type":"pptx_slide","content_kind":"instruction_text","instruction_role":"ui_details","slide_title":"B\u01B0\u1EDBc 2: Ch\u1ECDn m\u1EE5c T\u1EDD tr\u00ECnh nghi\u1EC7p v\u1EE5.","action_kind":"them_moi"}
+[SLIDE: Bước 2: Chọn mục Tờ trình nghiệp vụ.]
+[VĂN BẢN HƯỚNG DẪN]
+Tờ trình nghiệp vụ – Thêm mới
+--- DOC CHUNK ---
+Metadata: {"source":"Slide dao tao Phan mem QLTS GD 3 - T\u1EDD tr\u00ECnh nghi\u1EC7p v\u1EE5.pptx","slide":6,"type":"pptx_slide","content_kind":"instruction_text","instruction_role":"ui_details","slide_title":"B\u01B0\u1EDBc 2: Ch\u1ECDn m\u1EE5c T\u1EDD tr\u00ECnh nghi\u1EC7p v\u1EE5."}
+[SLIDE: Bước 2: Chọn mục Tờ trình nghiệp vụ.]
+[VĂN BẢN HƯỚNG DẪN]
+3. PHÂN HỆ TỜ TRÌNH NGHIỆP VỤ

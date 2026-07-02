@@ -154,7 +154,11 @@ public class PdfParser : IDocumentParser
 
                                 if (role == ImageRole.InlineIcon)
                                 {
-                                    iconMarkers.Add(ImageContentClassifier.BuildInlineMarker(ocrText));
+                                    var marker = ImageContentClassifier.BuildInlineMarker(ocrText);
+                                    if (!string.IsNullOrEmpty(marker))
+                                    {
+                                        iconMarkers.Add(marker);
+                                    }
                                 }
                                 else
                                 {

@@ -19,11 +19,12 @@ public class IngestionOptions
     public int MaxVisionImagesPerSlide { get; set; } = 0;
     public int MaxVisionImagesPerFile { get; set; } = 0;
     public int MaxConcurrentVisionCalls { get; set; } = 3;
-
+    
     public void Validate()
     {
         if (ChunkSize <= 0) throw new ArgumentOutOfRangeException(nameof(ChunkSize), "ChunkSize must be > 0");
         if (ChunkOverlap < 0 || ChunkOverlap >= ChunkSize) throw new ArgumentOutOfRangeException(nameof(ChunkOverlap), "ChunkOverlap must be >= 0 and < ChunkSize");
+        if (ChunkOverlap > ChunkSize / 2) throw new ArgumentOutOfRangeException(nameof(ChunkOverlap), "ChunkOverlap must be <= ChunkSize / 2");
         if (BatchSize <= 0) throw new ArgumentOutOfRangeException(nameof(BatchSize), "BatchSize must be > 0");
         if (MinVisionImageWidth <= 0) throw new ArgumentOutOfRangeException(nameof(MinVisionImageWidth), "MinVisionImageWidth must be > 0");
         if (MinVisionImageHeight <= 0) throw new ArgumentOutOfRangeException(nameof(MinVisionImageHeight), "MinVisionImageHeight must be > 0");

@@ -56,11 +56,11 @@ public static class ImageContentClassifier
     /// <summary>
     /// Builds an inline marker string for a small image/icon/button.
     /// </summary>
-    public static string BuildInlineMarker(string? ocrText)
+    public static string? BuildInlineMarker(string? ocrText)
     {
         if (!string.IsNullOrWhiteSpace(ocrText))
             return $"[N\u00FAt/\u1EA2nh: {ocrText.Trim()}]";
-        return "[\u1EA2nh nh\u1ECF]";
+        return null;
     }
 
     /// <summary>

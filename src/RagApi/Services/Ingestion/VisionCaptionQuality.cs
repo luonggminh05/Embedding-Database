@@ -55,6 +55,11 @@ internal static class VisionCaptionQuality
             return false;
         }
 
+        if (ContainsCjk(caption))
+        {
+            return false;
+        }
+
         if (PlaceholderEchoes.Any(normalized.Contains))
         {
             return false;
@@ -84,6 +89,8 @@ internal static class VisionCaptionQuality
     }
 
 
+    private static bool ContainsCjk(string text) =>
+        text.Any(ch => ch >= '\u4E00' && ch <= '\u9FFF');
     private static bool HasDegenerateRepetition(string text)
     {
         var normalized = Normalize(text);

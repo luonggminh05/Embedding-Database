@@ -1,30 +1,14 @@
 $ErrorActionPreference = "Stop"
 
+$Vm = if (![string]::IsNullOrWhiteSpace($env:DEPLOY_VM)) { $env:DEPLOY_VM } else { "YOUR_VM_USER@YOUR_VM_IP" }
+$RemoteApp = if (![string]::IsNullOrWhiteSpace($env:DEPLOY_REMOTE_APP)) { $env:DEPLOY_REMOTE_APP } else { "/home/YOUR_VM_USER/app_code" }
+$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
+$Ctr = "sudo /var/lib/rancher/rke2/bin/ctr -a /run/k3s/containerd/containerd.sock -n k8s.io"
 $EnvFile = Join-Path $PSScriptRoot ".env.ps1"
 
 if (Test-Path -LiteralPath $EnvFile) {
     . $EnvFile
 }
-
-function Get-RequiredSetting {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Value,
-        [Parameter(Mandatory = $true)]
-        [string]$Prompt
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($Value)) {
-        return $Value
-    }
-
-    return Read-Host $Prompt
-}
-
-$Vm = Get-RequiredSetting $env:DEPLOY_VM "Enter SSH target (user@host)"
-$RemoteApp = Get-RequiredSetting $env:DEPLOY_REMOTE_APP "Enter remote app path"
-$Kubectl = "sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml /var/lib/rancher/rke2/bin/kubectl"
-$Ctr = "sudo /var/lib/rancher/rke2/bin/ctr -a /run/k3s/containerd/containerd.sock -n k8s.io"
 function Get-SqlUser {
     if (-not [string]::IsNullOrWhiteSpace($env:SQLSERVER_USER)) {
         return $env:SQLSERVER_USER
@@ -82,4 +66,4 @@ ssh -t $Vm "$Kubectl apply -f $RemoteApp/k8s/api-server-dotnet.yaml"
 Write-Host "5. Restarting application pods..."
 ssh -t $Vm "$Kubectl delete pod -l app=sqlserver --force --grace-period=0 --ignore-not-found=true"
 ssh -t $Vm "$Kubectl delete pod -l app=api-server --force --grace-period=0 --ignore-not-found=true"
-Write-Host "Done. The service keeps NodePort 30001 and cluster port 8001."Write-Host "Done. The service keeps NodePort 30001 and cluster port 8001."
+Write-Host "Done. The service keeps NodePort 30001 and cluster port 8001."

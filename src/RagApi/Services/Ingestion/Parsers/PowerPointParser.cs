@@ -11,6 +11,7 @@ using Table = DocumentFormat.OpenXml.Drawing.Table;
 using Text = DocumentFormat.OpenXml.Drawing.Text;
 using Microsoft.Extensions.Options;
 using RagApi.Options;
+using RagApi.Services;
 
 namespace RagApi.Services.Ingestion.Parsers;
 
@@ -27,15 +28,19 @@ public class PowerPointParser : IDocumentParser
         public int SlideAttempts { get; set; }
     }
 
+    private sealed record InstructionBlock(string Text, string InstructionRole, string? ActionKind, int StepCount);
+
     /// <summary>Holds separated content extracted from a single slide.</summary>
     private sealed class SlideContent
     {
-        /// <summary>Text lines from shapes, tables, and inline image markers.</summary>
-        public List<string> InstructionalTexts { get; } = new();
+        /// <summary>Text blocks from shapes, tables, and inline image markers.</summary>
+        public List<InstructionBlock> InstructionBlocks { get; } = new();
         /// <summary>Standalone chunks for large images (OCR + Vision caption).</summary>
         public List<IngestedDocument> ImageChunks { get; } = new();
         /// <summary>Running counter for images on the current slide.</summary>
         public int ImageIndex { get; set; }
+        public string? SlideTitle { get; set; }
+        public string? ActionKind { get; set; }
     }
 
     public PowerPointParser(
@@ -116,6 +121,7 @@ public class PowerPointParser : IDocumentParser
 
     private async IAsyncEnumerable<IngestedDocument> ParseWithOpenXmlStreamAsync(string filePath, string fileName)
     {
+        var allDocsForDuplicateCheck = new List<IngestedDocument>();
         using var presentationDocument = PresentationDocument.Open(filePath, false);
         var presentationPart = presentationDocument.PresentationPart;
         var visionBudget = new VisionBudget();
@@ -131,32 +137,69 @@ public class PowerPointParser : IDocumentParser
                 var slidePart = (SlidePart)presentationPart.GetPartById(slideId.RelationshipId!);
                 var slideContent = await ExtractSlideContentAsync(slidePart, fileName, slideIndex, visionBudget);
                 
-                // Emit instruction_text chunk (text from shapes/tables + inline image markers)
-                var instructionText = string.Join("\n", slideContent.InstructionalTexts);
-                if (!string.IsNullOrWhiteSpace(instructionText))
+                // Emit instruction_text chunks (procedure steps are kept as complete blocks)
+                foreach (var instructionBlock in slideContent.InstructionBlocks.Where(block => !string.IsNullOrWhiteSpace(block.Text)))
                 {
-                    yield return new IngestedDocument
+                    var pageContent = string.IsNullOrEmpty(slideContent.SlideTitle)
+                        ? $"[V\u0102N B\u1EA2N H\u01AF\u1EDA\u004E\u0047 D\u1EAAN]\n{instructionBlock.Text}"
+                        : $"[SLIDE: {slideContent.SlideTitle}]\n[V\u0102N B\u1EA2N H\u01AF\u1EDA\u004E\u0047 D\u1EAAN]\n{instructionBlock.Text}";
+
+                    var metadata = new Dictionary<string, object>
                     {
-                        PageContent = $"[V\u0102N B\u1EA2N H\u01AF\u1EDA\u004E\u0047 D\u1EAAN]\n{instructionText}",
-                        Metadata = new Dictionary<string, object>
-                        {
-                            { "source", fileName },
-                            { "slide", slideIndex },
-                            { "type", "pptx_slide" },
-                            { "content_kind", "instruction_text" }
-                        }
+                        { "source", fileName },
+                        { "slide", slideIndex },
+                        { "type", "pptx_slide" },
+                        { "content_kind", "instruction_text" },
+                        { "instruction_role", instructionBlock.InstructionRole }
                     };
+
+                    if (!string.IsNullOrEmpty(slideContent.SlideTitle))
+                    {
+                        metadata["slide_title"] = slideContent.SlideTitle;
+                    }
+
+                    var actionKind = instructionBlock.ActionKind ?? slideContent.ActionKind;
+                    if (!string.IsNullOrEmpty(actionKind))
+                    {
+                        metadata["action_kind"] = actionKind;
+                    }
+
+                    if (instructionBlock.StepCount > 0)
+                    {
+                        metadata["step_count"] = instructionBlock.StepCount;
+                    }
+
+                    var instructionDoc = new IngestedDocument
+                    {
+                        PageContent = pageContent,
+                        Metadata = metadata
+                    };
+
+                    allDocsForDuplicateCheck.Add(instructionDoc);
+                    yield return instructionDoc;
                 }
 
                 // Emit each image_ui_description chunk separately
                 foreach (var imageChunk in slideContent.ImageChunks)
                 {
+                    if (!string.IsNullOrEmpty(slideContent.SlideTitle))
+                    {
+                        imageChunk.Metadata["slide_title"] = slideContent.SlideTitle;
+                    }
+                    if (!string.IsNullOrEmpty(slideContent.ActionKind))
+                    {
+                        imageChunk.Metadata["action_kind"] = slideContent.ActionKind;
+                    }
+
+                    allDocsForDuplicateCheck.Add(imageChunk);
                     yield return imageChunk;
                 }
 
                 slideIndex++;
             }
         }
+
+        NearDuplicateDetector.DetectAndLog(allDocsForDuplicateCheck, fileName, _logger);
     }
 
     private static List<IngestedDocument> ParseTextFromPackageFallback(string filePath, string fileName)
@@ -176,12 +219,25 @@ public class PowerPointParser : IDocumentParser
         {
             using var stream = entry.Open();
             var document = XDocument.Load(stream);
-            var text = string.Join(" ", document
-                .Descendants()
-                .Where(e => e.Name.LocalName == "t")
-                .Select(e => e.Value.Trim())
-                .Where(value => !string.IsNullOrWhiteSpace(value)))
-                .Trim();
+            string text;
+            var paragraphs = document.Descendants().Where(e => e.Name.LocalName == "p").ToList();
+            if (paragraphs.Count > 0)
+            {
+                var paragraphTexts = new List<string>();
+                foreach (var p in paragraphs)
+                {
+                    var pText = string.Concat(p.Descendants().Where(e => e.Name.LocalName == "t").Select(e => e.Value));
+                    if (!string.IsNullOrWhiteSpace(pText))
+                    {
+                        paragraphTexts.Add(CleanPptText(pText));
+                    }
+                }
+                text = string.Join("\n", paragraphTexts);
+            }
+            else
+            {
+                text = string.Concat(document.Descendants().Where(e => e.Name.LocalName == "t").Select(e => e.Value)).Trim();
+            }
 
             if (!string.IsNullOrWhiteSpace(text))
             {
@@ -212,6 +268,12 @@ public class PowerPointParser : IDocumentParser
             : int.MaxValue;
     }
 
+    private static bool IsStepLine(string line) =>
+        Regex.IsMatch(line, @"^\s*(?:Bước|Buoc|Step|B)\s*\d+\b", RegexOptions.IgnoreCase);
+
+    private static string NormalizeForActionDetection(string text) => ActionKindClassifier.NormalizeText(text);
+
+    private static string? DetermineActionKind(string? title) => ActionKindClassifier.DetermineActionKind(title);
     private async Task<SlideContent> ExtractSlideContentAsync(
         SlidePart slidePart,
         string fileName,
@@ -224,6 +286,56 @@ public class PowerPointParser : IDocumentParser
         var shapeTree = slide?.CommonSlideData?.ShapeTree;
         if (shapeTree == null) return content;
 
+        // Scan shapes for title
+        string? detectedTitle = null;
+        foreach (var element in shapeTree.Elements())
+        {
+            if (element is Shape shape)
+            {
+                var text = GetCleanText(shape);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var line in lines)
+                    {
+                        if (IsStepLine(line)) continue;
+                        var normLine = NormalizeForActionDetection(line);
+                        if (normLine.Contains("to trinh nghiep vu"))
+                        {
+                            detectedTitle = line.Trim();
+                            break;
+                        }
+                    }
+                }
+            }
+            if (detectedTitle != null) break;
+        }
+
+        if (detectedTitle == null)
+        {
+            foreach (var element in shapeTree.Elements())
+            {
+                if (element is Shape shape)
+                {
+                    var text = GetCleanText(shape);
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var line in lines)
+                        {
+                            if (IsStepLine(line)) continue;
+                            detectedTitle = line.Trim();
+                            break;
+                        }
+                        if (detectedTitle != null) break;
+                    }
+                }
+            }
+        }
+
+        content.SlideTitle = detectedTitle;
+        content.ActionKind = DetermineActionKind(detectedTitle);
+
         foreach (var element in shapeTree.Elements())
         {
             await ProcessElementAsync(element, slidePart, content, fileName, slideIndex, visionBudget);
@@ -231,6 +343,115 @@ public class PowerPointParser : IDocumentParser
 
         return content;
     }
+
+    private static string GetCleanText(DocumentFormat.OpenXml.OpenXmlElement element)
+    {
+        var paragraphs = element.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>().ToList();
+        if (paragraphs.Count == 0)
+        {
+            var text = string.Concat(element.Descendants<Text>().Select(t => t.Text));
+            return CleanPptText(text);
+        }
+
+        var paragraphTexts = new List<string>();
+        foreach (var p in paragraphs)
+        {
+            var pText = string.Concat(p.Descendants<Text>().Select(t => t.Text));
+            if (!string.IsNullOrWhiteSpace(pText))
+            {
+                paragraphTexts.Add(CleanPptText(pText));
+            }
+        }
+        return CleanPptText(string.Join("\n", paragraphTexts));
+    }
+
+    private static string CleanPptText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        
+        var pattern = @"[ \t]*\t[ \t]*| {8,}";
+        normalized = Regex.Replace(normalized, pattern, match =>
+        {
+            var index = match.Index;
+            var textBefore = normalized.Substring(0, index).TrimEnd();
+            
+            var last25 = textBefore.Length >= 25 
+                ? textBefore.Substring(textBefore.Length - 25) 
+                : textBefore;
+            
+            bool hasNutNearby = last25.Contains("nút", StringComparison.OrdinalIgnoreCase) || 
+                                last25.Contains("nut", StringComparison.OrdinalIgnoreCase);
+            
+            return hasNutNearby ? " " : " nút ";
+        });
+
+        normalized = Regex.Replace(normalized, @"[ \f\v]+", " ");
+        normalized = Regex.Replace(normalized, @" *\n *", "\n");
+        return normalized.Trim();
+    }
+
+    private static void AddInstructionText(SlideContent content, string text)
+    {
+        var cleaned = CleanPptText(text);
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return;
+        }
+
+        var procedureBlocks = SplitProcedureBlocks(cleaned);
+        if (procedureBlocks.Count == 0)
+        {
+            var detailAction = ActionKindClassifier.DetermineActionKind(cleaned) ?? content.ActionKind;
+            content.InstructionBlocks.Add(new InstructionBlock(cleaned, "ui_details", detailAction, 0));
+            return;
+        }
+
+        foreach (var block in procedureBlocks)
+        {
+            var stepCount = CountSteps(block);
+            var actionKind = ActionKindClassifier.DetermineActionKind(block) ?? content.ActionKind;
+            content.InstructionBlocks.Add(new InstructionBlock(block, "procedure_steps", actionKind, stepCount));
+        }
+    }
+
+    private static List<string> SplitProcedureBlocks(string text)
+    {
+        if (CountSteps(text) == 0)
+        {
+            return [];
+        }
+
+        var starts = Regex.Matches(text, @"\b(?:Bước|Buoc|B)\s*1\s*:", RegexOptions.IgnoreCase)
+            .Select(match => match.Index)
+            .ToList();
+
+        if (starts.Count <= 1)
+        {
+            return [text.Trim()];
+        }
+
+        var blocks = new List<string>();
+        for (var i = 0; i < starts.Count; i++)
+        {
+            var start = starts[i];
+            var end = i + 1 < starts.Count ? starts[i + 1] : text.Length;
+            var block = text[start..end].Trim();
+            if (!string.IsNullOrWhiteSpace(block))
+            {
+                blocks.Add(block);
+            }
+        }
+
+        return blocks;
+    }
+
+    private static int CountSteps(string text) =>
+        Regex.Matches(text, @"\b(?:Bước|Buoc|B)\s*\d+\s*:", RegexOptions.IgnoreCase).Count;
 
     private async Task ProcessElementAsync(
         DocumentFormat.OpenXml.OpenXmlElement element,
@@ -242,8 +463,8 @@ public class PowerPointParser : IDocumentParser
     {
         if (element is Shape shape)
         {
-            var text = string.Join(" ", shape.Descendants<Text>().Select(t => t.Text)).Trim();
-            if (!string.IsNullOrWhiteSpace(text)) content.InstructionalTexts.Add(text);
+            var text = GetCleanText(shape);
+            if (!string.IsNullOrWhiteSpace(text)) AddInstructionText(content, text);
             return;
         }
 
@@ -255,16 +476,16 @@ public class PowerPointParser : IDocumentParser
                 foreach (var row in table.Descendants<DocumentFormat.OpenXml.Drawing.TableRow>())
                 {
                     var rowTexts = row.Descendants<DocumentFormat.OpenXml.Drawing.TableCell>()
-                        .Select(cell => string.Join(" ", cell.Descendants<Text>().Select(t => t.Text)).Trim())
+                        .Select(cell => GetCleanText(cell))
                         .Where(t => !string.IsNullOrWhiteSpace(t));
                     var rowString = string.Join(" | ", rowTexts);
-                    if (!string.IsNullOrWhiteSpace(rowString)) content.InstructionalTexts.Add(rowString);
+                    if (!string.IsNullOrWhiteSpace(rowString)) AddInstructionText(content, rowString);
                 }
             }
             else
             {
-                var text = string.Join(" ", graphicFrame.Descendants<Text>().Select(t => t.Text)).Trim();
-                if (!string.IsNullOrWhiteSpace(text)) content.InstructionalTexts.Add(text);
+                var text = GetCleanText(graphicFrame);
+                if (!string.IsNullOrWhiteSpace(text)) AddInstructionText(content, text);
             }
             return;
         }
@@ -325,12 +546,16 @@ public class PowerPointParser : IDocumentParser
         // --- Small image or short OCR (button/icon): inject inline marker into instruction text ---
         if (role == ImageRole.InlineIcon)
         {
-            content.InstructionalTexts.Add(ImageContentClassifier.BuildInlineMarker(ocrText));
+            var marker = ImageContentClassifier.BuildInlineMarker(ocrText);
+            if (!string.IsNullOrEmpty(marker))
+            {
+                AddInstructionText(content, marker);
+            }
             return;
         }
 
         // --- Large image (screenshot/UI): add short placeholder to instruction text ---
-        content.InstructionalTexts.Add(ImageContentClassifier.BuildScreenshotPlaceholder());
+        AddInstructionText(content, ImageContentClassifier.BuildScreenshotPlaceholder());
 
         // Build a separate image_ui_description chunk
         var metadata = new Dictionary<string, object>
@@ -426,5 +651,4 @@ public class PowerPointParser : IDocumentParser
         visionBudget.FileAttempts++;
         return true;
     }
-
 }

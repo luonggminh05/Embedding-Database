@@ -204,14 +204,23 @@ kubectl get nodes
 
 ## 1.8. Triển khai project
 
-Có thể gom các lệnh build và upload image vào một script. Trước khi chạy script, cần kiểm tra các biến cấu hình sau:
+Dự án cung cấp hai kịch bản PowerShell để tự động hóa việc triển khai và làm sạch dữ liệu:
+1. `deploy_dotnet.ps1`: Sao chép mã nguồn sang máy ảo VM, build các Docker image, nạp vào containerd của RKE2 và apply các manifest k8s.
+2. `clean_and_reload.ps1`: Xóa sạch các tài liệu trong `/opt/papers/` trên VM, drop bảng `Documents` trong SQL Server, restart API Server và copy lại tài liệu sạch từ Windows sang máy ảo.
 
-- User và IP máy ảo phải đúng với môi trường hiện tại.
-- Đường dẫn remote trên Ubuntu phải tồn tại hoặc script có bước tạo thư mục.
-- Mật khẩu SQL Server `sa` phải đủ mạnh và được truyền qua biến môi trường hoặc nhập khi script hỏi.
-- Các manifest Kubernetes trong thư mục `k8s` đã đúng image name, service name và NodePort mong muốn.
+### Tránh lưu thông tin nhạy cảm trong code:
+Để tránh lộ IP, username và mật khẩu khi push lên Git, các script hỗ trợ cấu hình thông qua biến môi trường. Bạn nên định nghĩa chúng trong file `.env.ps1` (đã được cấu hình trong `.gitignore` để không bị push lên Git):
 
-Sau khi deploy, kiểm tra các pod:
+```powershell
+$env:DEPLOY_VM = "username@vm-ip"
+$env:DEPLOY_REMOTE_APP = "/home/username/app_code"
+$env:SQLSERVER_SA_PASSWORD = "YourStrong!Passw0rd"
+$env:SQLSERVER_USER = "sa"
+```
+
+Trước khi chạy script triển khai (`deploy_dotnet.ps1` hoặc `clean_and_reload.ps1`), đảm bảo đã tạo file `.env.ps1` trong thư mục gốc.
+
+Sau khi deploy, kiểm tra các pod trên máy ảo:
 
 ```bash
 kubectl get pods

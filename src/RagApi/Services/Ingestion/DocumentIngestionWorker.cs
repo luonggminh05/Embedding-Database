@@ -107,7 +107,7 @@ public class DocumentIngestionWorker : BackgroundService
                     var fingerprint = GetFingerprint(filePath);
                     if (_processedFingerprints.Contains(fingerprint))
                     {
-                        _logger.LogDebug("Skipping file {FilePath} as it has not changed since last ingestion.", filePath);
+                        _logger.LogInformation("Skipping file {FilePath} as it has not changed since last ingestion.", filePath);
                         continue;
                     }
 
@@ -117,7 +117,8 @@ public class DocumentIngestionWorker : BackgroundService
 
                     if (success)
                     {
-                        _processedFingerprints.Add(fingerprint);
+                        var finalFingerprint = GetFingerprint(filePath);
+                        _processedFingerprints.Add(finalFingerprint);
                         _retryCounts.Remove(filePath);
                     }
                     else
@@ -165,10 +166,13 @@ public class DocumentIngestionWorker : BackgroundService
         }
     }
 
-    private async Task<bool> WaitForFileAccessAsync(string filePath, CancellationToken stoppingToken)
+    internal async Task<bool> WaitForFileAccessAsync(string filePath, CancellationToken stoppingToken)
     {
         int retries = 5;
         int delayMs = 1000;
+
+        long? lastLength = null;
+        DateTime? lastWriteTime = null;
 
         for (int i = 0; i < retries; i++)
         {
@@ -176,17 +180,38 @@ public class DocumentIngestionWorker : BackgroundService
 
             try
             {
-                using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None);
-                return true;
+                using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    var fileInfo = new FileInfo(filePath);
+                    long currentLength = fileInfo.Length;
+                    DateTime currentWriteTime = fileInfo.LastWriteTimeUtc;
+
+                    if (lastLength.HasValue && lastWriteTime.HasValue)
+                    {
+                        if (currentLength == lastLength.Value && currentWriteTime == lastWriteTime.Value)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            _logger.LogInformation("File {FilePath} metadata changed (Length: {LastLen}->{CurrLen}, Time: {LastTime}->{CurrTime}). Retrying for stability...", 
+                                filePath, lastLength.Value, currentLength, lastWriteTime.Value, currentWriteTime);
+                        }
+                    }
+
+                    lastLength = currentLength;
+                    lastWriteTime = currentWriteTime;
+                }
             }
             catch (IOException)
             {
                 _logger.LogDebug("File {FilePath} is locked, retrying in {Delay}ms...", filePath, delayMs);
-                await Task.Delay(delayMs, stoppingToken);
             }
+
+            await Task.Delay(delayMs, stoppingToken);
         }
         
-        _logger.LogWarning("Failed to access file {FilePath} after {Retries} retries", filePath, retries);
+        _logger.LogWarning("Failed to access stable file {FilePath} after {Retries} retries", filePath, retries);
         return false;
     }
 

@@ -5,6 +5,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using RagApi.Models;
 using RagApi.Options;
+using RagApi.Services;
 
 namespace RagApi.Data;
 
@@ -14,10 +15,16 @@ public interface ISqlDocumentRepository
     Task UpsertDocumentsAsync(AddDocumentsRequest request, IReadOnlyList<IReadOnlyList<float>> embeddings, CancellationToken cancellationToken);
     Task DropVectorIndexAsync(CancellationToken cancellationToken);
     Task RecreateVectorIndexAsync(CancellationToken cancellationToken);
+    Task DeleteDocumentsForFileAsync(string relativePath, string source, CancellationToken cancellationToken);
     Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken, string? contentKind = null);
     Task<IReadOnlyList<(string Document, JsonElement Metadata)>> GetRelatedChunksAsync(
         IReadOnlyList<JsonElement> sourceMetadatas,
         string contentKind,
+        int limit,
+        CancellationToken cancellationToken);
+    Task<IReadOnlyList<(string Document, JsonElement Metadata)>> GetProcedureChunksByActionAsync(
+        IReadOnlyList<JsonElement> sourceMetadatas,
+        string actionKind,
         int limit,
         CancellationToken cancellationToken);
 }
@@ -126,6 +133,22 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
         await EnsureVectorIndexAsync(cancellationToken);
     }
 
+    public async Task DeleteDocumentsForFileAsync(string relativePath, string source, CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM Documents
+            WHERE JSON_VALUE(metadata, '$.relative_path') = @relativePath
+               OR JSON_VALUE(metadata, '$.source') = @source;
+            """;
+        AddParameter(command, "@relativePath", SqlDbType.NVarChar, 512, relativePath);
+        AddParameter(command, "@source", SqlDbType.NVarChar, 512, source);
+
+        var deleted = await command.ExecuteNonQueryAsync(cancellationToken);
+        _logger.LogInformation("Deleted {Count} existing chunks for {Source} before re-ingest.", deleted, source);
+    }
     public async Task<SearchResponse> SearchAsync(string query, IReadOnlyList<float> queryEmbedding, int requestedTopK, CancellationToken cancellationToken, string? contentKind = null)
     {
         var topK = Math.Clamp(requestedTopK, 1, Math.Max(1, _searchOptions.TopKMax));
@@ -382,6 +405,76 @@ public sealed class SqlDocumentRepository : ISqlDocumentRepository
 
         return results;
     }
+
+    public async Task<IReadOnlyList<(string Document, JsonElement Metadata)>> GetProcedureChunksByActionAsync(
+        IReadOnlyList<JsonElement> sourceMetadatas,
+        string actionKind,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        if (sourceMetadatas.Count == 0 || string.IsNullOrWhiteSpace(actionKind) || limit <= 0)
+        {
+            return [];
+        }
+
+        var normalizedAction = ActionKindClassifier.NormalizeActionKind(actionKind);
+        if (string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return [];
+        }
+
+        var sources = sourceMetadatas
+            .Select(metadata => GetMetadataString(metadata, "source"))
+            .Where(source => !string.IsNullOrWhiteSpace(source))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+
+        if (sources.Count == 0)
+        {
+            return [];
+        }
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+
+        AddParameter(command, "@limit", SqlDbType.Int, 0, limit);
+        AddParameter(command, "@actionKind", SqlDbType.NVarChar, 64, normalizedAction);
+        AddParameter(command, "@legacyActionKind", SqlDbType.NVarChar, 64, normalizedAction == ActionKindClassifier.Duyet ? "phe_duyet" : normalizedAction);
+
+        var sourcePredicates = new List<string>();
+        for (var i = 0; i < sources.Count; i++)
+        {
+            var param = $"@source{i}";
+            AddParameter(command, param, SqlDbType.NVarChar, 512, sources[i]!);
+            sourcePredicates.Add($"JSON_VALUE(metadata, '$.source') = {param}");
+        }
+
+        command.CommandText = $"""
+            SELECT TOP (@limit) document, metadata
+            FROM Documents
+            WHERE JSON_VALUE(metadata, '$.content_kind') = 'instruction_text'
+              AND JSON_VALUE(metadata, '$.instruction_role') = 'procedure_steps'
+              AND (JSON_VALUE(metadata, '$.action_kind') = @actionKind OR JSON_VALUE(metadata, '$.action_kind') = @legacyActionKind)
+              AND ({string.Join(" OR ", sourcePredicates)})
+            ORDER BY TRY_CONVERT(int, JSON_VALUE(metadata, '$.slide')) ASC,
+                     TRY_CONVERT(int, JSON_VALUE(metadata, '$.chunk_index')) ASC,
+                     id_int ASC;
+            """;
+
+        var results = new List<(string Document, JsonElement Metadata)>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add((
+                reader.GetString(reader.GetOrdinal("document")),
+                ParseMetadata(reader.GetString(reader.GetOrdinal("metadata")))));
+        }
+
+        return results;
+    }
+
     private async Task EnsureDatabaseAsync(CancellationToken cancellationToken)
     {
         var builder = new SqlConnectionStringBuilder(_connectionString);

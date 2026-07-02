@@ -115,11 +115,18 @@ kubectl get svc embedding-server
 
 Kiểm tra API có hoạt động không:
 
+### 1. Kiểm tra trực tiếp Embedding Server (TEI)
 ```bash
 curl -X POST http://<vm-ip>:30080/embed \
     -H 'Content-Type: application/json' \
     -d '{"inputs": ["test"]}'
 ```
+
+### 2. Kiểm tra API Server (ASP.NET Core)
+```bash
+curl http://<vm-ip>:30001/
+```
+Kết quả trả về sẽ có dạng: `{"status":"ok","message":"ASP.NET Core Embedding & SQL Server Service is running"}`.
 
 ---
 
@@ -201,7 +208,7 @@ spec:
 - **Host nội bộ (Trong K8s):** `sqlserver`
 - **Port nội bộ:** `1433`
 - **NodePort (Truy cập từ Windows):** `31433` (IP: `<vm-ip>,31433`)
-- **Database:** `master`
+- **Database:** `RagDb`
 - **Table:** `Documents` (Có cột `embedding VECTOR(1024)`)
 
 ## 6. Kiểm tra
@@ -223,8 +230,8 @@ Kết nối thử bằng công cụ:
 **Backup (T-SQL):**
 
 ```sql
-BACKUP DATABASE master
-TO DISK = '/var/opt/mssql/data/master_backup.bak'
+BACKUP DATABASE RagDb
+TO DISK = '/var/opt/mssql/data/RagDb_backup.bak'
 ```
 
 _(Do file backup nằm trong thư mục `/var/opt/mssql/data`, nên đã được PVC lưu trữ vĩnh viễn)._
@@ -232,8 +239,8 @@ _(Do file backup nằm trong thư mục `/var/opt/mssql/data`, nên đã đượ
 **Restore (T-SQL):**
 
 ```sql
-RESTORE DATABASE master
-FROM DISK = '/var/opt/mssql/data/master_backup.bak'
+RESTORE DATABASE RagDb
+FROM DISK = '/var/opt/mssql/data/RagDb_backup.bak'
 WITH REPLACE
 ```
 

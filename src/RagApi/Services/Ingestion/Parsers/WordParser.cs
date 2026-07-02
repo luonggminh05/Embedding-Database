@@ -144,7 +144,11 @@ public class WordParser : IDocumentParser
         // --- Small inline image with short OCR (button/icon): inject inline marker ---
         if (effectiveRole == ImageRole.InlineIcon)
         {
-            paragraphText.Append($" {ImageContentClassifier.BuildInlineMarker(ocrText)} ");
+            var marker = ImageContentClassifier.BuildInlineMarker(ocrText);
+            if (!string.IsNullOrEmpty(marker))
+            {
+                paragraphText.Append($" {marker} ");
+            }
             return;
         }
 

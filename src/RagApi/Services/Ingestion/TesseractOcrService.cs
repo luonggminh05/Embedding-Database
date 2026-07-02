@@ -24,6 +24,11 @@ public sealed class TesseractOcrService : IOcrService
             return Task.FromResult<string?>(null);
         }
 
+        if (ImageUtilities.TryGetDimensions(imageBytes, out var width, out var height) && ImageUtilities.ShouldSkipOcr(width, height))
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         var tessDataPath = _options.TessdataPath;
         if (!Path.IsPathRooted(tessDataPath))
         {
@@ -49,13 +54,16 @@ public sealed class TesseractOcrService : IOcrService
                 return null;
             }
 
-            var ocrImageBytes = ImageUtilities.PrepareForOcr(imageBytes);
-            foreach (var language in languages)
+            var variants = ImageUtilities.PrepareOcrVariants(imageBytes);
+            foreach (var variant in variants)
             {
-                var text = TryExtractText(tessDataPath, language, ocrImageBytes);
-                if (!string.IsNullOrWhiteSpace(text))
+                foreach (var language in languages)
                 {
-                    return text;
+                    var text = TryExtractText(tessDataPath, language, variant);
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        return text;
+                    }
                 }
             }
 
@@ -102,7 +110,12 @@ public sealed class TesseractOcrService : IOcrService
                 using var image = Pix.LoadFromMemory(imageBytes);
                 using var page = engine.Process(image);
                 var text = page.GetText()?.Trim();
-                return string.IsNullOrWhiteSpace(text) ? null : string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+                var cleaned = TextArtifactCleaner.Clean(text);
+                return string.IsNullOrWhiteSpace(cleaned) ? null : cleaned;
             }
         }
         catch (Exception ex)
